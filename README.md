@@ -3,11 +3,12 @@
 A project for capturing anything on your computer.
 
 Ideally, I want to be able to capture:
- - [ ] input devices
- - [ ] output devices
+ - [X] input devices
+ - [X] output devices
  - [ ] webcams
  - [ ] monitors
  - [ ] windows with audio
+ - [ ] gifs, images, and video
  - [ ] youtube videos
 
 And for processing these, I'd want:
@@ -15,25 +16,25 @@ And for processing these, I'd want:
  - [ ] a way to create scenes like OBS
  - [ ] direct streaming to twitch (this is a stretch)
 
-
-## Modules
-
-Must haves:
- - pip install numpy
- - pip install PyAudioWPatch
+|    module     |          command          |
+|:-------------:|:-------------------------:|
+|     numpy     |     pip install numpy     |
+| pyaudiowpatch | pip install PyAudioWPatch |
+|  pygetwindow  |  pip install pygetwindow  |
+|   pyautogui   |   pip install PyAutoGUI   |
+|      cv2      | pip install opencv-python |
+|  screeninfo   |  pip install screeninfo   |
 
 
 ## Reference
 
-Might not need these:
- - pip install pyaudio <- replaced with PyAudioWPatch
- - pip install cmake
+look into this:
  - pip install ndi-python
 
 
 ## Note
 
-There is an issue with recording output devices in windows. Here's more details in this [stack overflow question](https://stackoverflow.com/questions/26573556/record-speakers-output-with-pyaudio)
+There is an issue with recording output devices in windows, which is why I had to use the PyAudioWPatch fork of PyAudio. Here's more details in this [stack overflow question](https://stackoverflow.com/questions/26573556/record-speakers-output-with-pyaudio)
 
 Solution:
  - [PyAudioWPatch](https://github.com/s0d3s/PyAudioWPatch) GitHub repo
