@@ -64,9 +64,6 @@ def scratch_paper():
 
     # example_0()
 
-    # screenshot = ImageGrab.grab(all_screens=True)
-    # screenshot.show()
-
     print(Display.get_all_devices())
 
 

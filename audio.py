@@ -1,19 +1,22 @@
 from __future__ import annotations
 
+import datetime
 import enum
 import numpy
 import logging
 import pyaudiowpatch as pyaudio
 
+import matplotlib.pyplot as plt
+
 from device import Device
 
 
-class AudioDeviceType(enum.Enum):
+class AudioDeviceType(enum.Enum):  # I might want to change this to AudioType TODO
     Input = "input"
     Output = "output"
 
 
-class AudioDevice(Device):
+class AudioDevice(Device):  # I might want to change this to Audio TODO
     """ An interface-like class that defines the main functionality for an audio device. """
 
     p = pyaudio.PyAudio()
@@ -67,17 +70,18 @@ class AudioDevice(Device):
     def opposite_channels(self):
         return self.max_input_channels if self.audio_type == AudioDeviceType.Output else self.max_output_channels
 
-    def get_audio_stream(self):
-        return self.p.open(
-            **{
-                "format": pyaudio.paInt16,
-                "channels": self.channels,
-                "rate": int(self.default_sample_rate),
-                "input" if self.audio_type == AudioDeviceType.Input else "output": True,
-                "frames_per_buffer": self.chunk_size,
-                "input_device_index": self.index
-            }
-        )
+    def get_audio_stream(self, stream_callback=None):
+        kwargs = {
+            "format": pyaudio.paInt16,
+            "channels": self.channels,
+            "rate": int(self.default_sample_rate),
+            "input" if self.audio_type == AudioDeviceType.Input else "output": True,
+            "frames_per_buffer": self.chunk_size,
+            "input_device_index": self.index
+        }
+        if stream_callback is not None:
+            kwargs["stream_callback"] = stream_callback
+        return self.p.open(**kwargs)
 
     # def send_via_ndi(self):
     #     ndi_send = ndi.send_audio()
@@ -101,9 +105,6 @@ class AudioDevice(Device):
     #     stream.stop_stream()
     #     stream.close()
     #     ndi_send.destroy()
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}(name={self.name})'
 
 
 class Microphone(AudioDevice):
@@ -140,8 +141,25 @@ class Speaker(AudioDevice):
     def get_all_devices(cls):
         return [d for d in super().get_all_devices() if d.channels != 0]
 
-    def get_audio_stream(self):
+    def get_audio_stream(self, stream_callback=None):
         return self.loopback_device.get_audio_stream() if self.loopback_device else None
+
+    def get_live_view(self, resize=False):
+
+        stream = self.get_audio_stream()
+        x = numpy.arange(0, self.chunk_size * 2)
+
+        figure = plt.figure()
+        axes = figure.gca()
+        axes.axis([0, self.chunk_size * 2, -self.chunk_size, self.chunk_size])
+        figure.show()
+        while True:
+            data = stream.read(self.chunk_size)
+            data_np = numpy.frombuffer(data, dtype=numpy.int16)
+            axes.clear()
+            axes.scatter(x, data_np)
+            figure.canvas.draw()
+            figure.canvas.flush_events()
 
 
 class LoopbackSpeaker(AudioDevice):
@@ -151,6 +169,9 @@ class LoopbackSpeaker(AudioDevice):
     I need some way of getting loopback audio devices from pyaudiowpatch in order to actually
     read a speaker's stream. Creating a whole new child class for this is a bit wasteful, but
     it fits well with the current AudioDevice hierarchy. I might want to change this later.
+
+    Note:
+        Simplify this class structure with a mixin TODO
     """
 
     cache = {}
@@ -175,6 +196,8 @@ if __name__ == '__main__':
         print()
 
     speaker = Speaker.search_for("Main Output 1/2 (Audient EVO8)")
+    speaker.get_live_view()
+
     microphone = Microphone.search_for("Mic | Line 1/2 (Audient EVO8)")
 
     audio = Speaker.get_default_device()

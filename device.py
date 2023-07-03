@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import sys
 import logging
+
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 
 class Device:
@@ -49,3 +52,6 @@ class Device:
                     )
                     break
         return target_device
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}(name={self.name})'

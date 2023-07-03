@@ -10,6 +10,7 @@ Ideally, I want to be able to capture:
  - [ ] windows with audio
  - [ ] gifs, images, and video
  - [ ] youtube videos
+ - [ ] key and mouse logger
 
 And for processing these, I'd want:
  - [ ] sending data via NDI
@@ -24,6 +25,7 @@ And for processing these, I'd want:
 |   pyautogui   |   pip install PyAutoGUI   |
 |      cv2      | pip install opencv-python |
 |  screeninfo   |  pip install screeninfo   |
+|  matplotlib   |  pip install matplotlib   |
 
 
 ## Reference
