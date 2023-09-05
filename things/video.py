@@ -220,14 +220,17 @@ class ScreenInfoMonitor(Display):
     @classmethod
     def get_all_devices(cls):
         devices = [
-            cls(
-                index=i,
-                x=m.__dict__["x"], 
-                y=m.__dict__["y"], 
-                width=m.__dict__["width"], 
-                height=m.__dict__["height"], 
-                width_mm=m.__dict__["width_mm"], 
-                height_mm=m.__dict__["height_mm"]
+            cls.get_cache().get(
+                i,
+                cls(
+                    index=i,
+                    x=m.__dict__["x"], 
+                    y=m.__dict__["y"], 
+                    width=m.__dict__["width"], 
+                    height=m.__dict__["height"], 
+                    width_mm=m.__dict__["width_mm"], 
+                    height_mm=m.__dict__["height_mm"]
+                )
             )
             for i, m in enumerate(screeninfo.get_monitors())
         ]
@@ -291,12 +294,15 @@ class MssMonitor(Display):
         with mss() as sct:
             # all monitors are a dict: {'left': 0, 'top': 0, 'width': 2560, 'height': 1440}
             return [
-                cls(
-                    index=i,
-                    x=monitor["left"], 
-                    y=monitor["top"], 
-                    width=monitor["width"], 
-                    height=monitor["height"]
+                cls.get_cache().get(
+                    i,
+                    cls(
+                        index=i,
+                        x=monitor["left"], 
+                        y=monitor["top"], 
+                        width=monitor["width"], 
+                        height=monitor["height"]
+                    )
                 )
                 for i, monitor in enumerate(
                     sct.monitors if not cls.IGNORE_FULL_DISPLAY
@@ -497,19 +503,23 @@ class ChromecastMonitor(Display):
             width = 1
             height = 1
             devices.append(
-                cls(
-                    index=i,
-                    width=width,
-                    height=height,
-                    services=cast_info.services,
-                    uuid=cast_info.uuid,
-                    model_name=cast_info.model_name,
-                    friendly_name=cast_info.friendly_name,
-                    host=cast_info.host,
-                    port=cast_info.port,
-                    cast_type=cast_info.cast_type,
-                    manufacturer=cast_info.manufacturer,
+                cls.get_cache().get(
+                    i,
+                    cls(
+                        index=i,
+                        width=width,
+                        height=height,
+                        services=cast_info.services,
+                        uuid=cast_info.uuid,
+                        model_name=cast_info.model_name,
+                        friendly_name=cast_info.friendly_name,
+                        host=cast_info.host,
+                        port=cast_info.port,
+                        cast_type=cast_info.cast_type,
+                        manufacturer=cast_info.manufacturer,
+                    )
                 )
+                
             )
         pychromecast.discovery.stop_discovery(browser)
         return devices
@@ -537,6 +547,10 @@ class ChromecastMonitor(Display):
 
 
 class ApplicationWindow(Display):
+
+    """
+    
+    """
 
     def __init__(self, window) -> None:
 
@@ -599,7 +613,7 @@ class ApplicationWindow(Display):
             getAllTitles
         """
         return [
-            cls.get_cache().get(window._hWnd, ApplicationScreen(window))
+            cls.get_cache().get(window._hWnd, cls(window))
             for window in pygetwindow.getAllWindows()
             if 0 not in [window.width, window.height]
         ]
@@ -655,7 +669,7 @@ class ApplicationWindow(Display):
         mfc_dc.DeleteDC()
         win32gui.ReleaseDC(self.hwnd, hwnd_dc)
 
-        return image
+        return self.scale_surface_image(image, scalar=scalar)
     
     def get_np_image(self, scalar=1):
         np_array = numpy.array(self.get_surface_image(scalar=scalar))
