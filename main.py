@@ -18,7 +18,7 @@ def example_0():
     codec = cv2.VideoWriter_fourcc(*"XVID")
 
     # Specify name of Output file
-    filename = "Recording.avi"
+    filename = "output/Recording.avi"
 
     # Specify frames rate. We can choose any
     # value and experiment with it

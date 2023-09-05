@@ -14,7 +14,7 @@ import pygetwindow
 from PIL import Image, ImageGrab
 from fractions import Fraction
 
-from device import Device
+from things.device import Device
 
 
 class DisplayType(enum.Enum):
@@ -226,6 +226,8 @@ class Chromecast(Display):
 
     # # Shut down discovery
     # pychromecast.discovery.stop_discovery(browser)
+
+    pass
 
 
 def main():
