@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import datetime
 import enum
+import logging
 import os
 from abc import ABC, abstractmethod
 from datetime import datetime
 from fractions import Fraction
 from functools import cached_property
+from typing import Self
 
 import cv2
 import numpy
@@ -48,8 +50,19 @@ class SurfaceMixin(ABC):
     def get_np_image(self, scalar=None):
         pass
 
+    def get_live_view(self, scalar=None):
+        try:
+            while True:
+                np_image = self.get_np_image(scalar=scalar)
+                cv2.imshow("Captured Window", np_image)
+                if cv2.waitKey(1) == ord('q'):
+                    break
+        except KeyboardInterrupt:
+            pass
+        cv2.destroyAllWindows()
+
     def record(self, filename, scalar=None, fps=20.0):
-        # we have to keep track of slacing between the recorder initializing and
+        # we have to keep track of scaling between the recorder initializing and
         # the frame retrival. Try to marry the two to just one specification. TODO
         recorder = XvidRecorder(
             filepath=os.path.join(self.OUTPUT_DIR, filename),
@@ -75,17 +88,6 @@ class SurfaceMixin(ABC):
             print(f"{1/elapsed_time:.2f} fps")
 
         recorder.output.release()
-        cv2.destroyAllWindows()
-
-    def get_live_view(self, scalar=None):
-        try:
-            while True:
-                np_image = self.get_np_image(scalar=scalar)
-                cv2.imshow("Captured Window", np_image)
-                if cv2.waitKey(1) == ord('q'):
-                    break
-        except KeyboardInterrupt:
-            pass
         cv2.destroyAllWindows()
 
 
@@ -189,8 +191,9 @@ class Display(SurfaceMixin, CacherMixin, ABC):
     --
     Sincerely,
     Bot (2023.09.04 ChatGPT-4)
-    
     """
+
+    logger = logging.getLogger(__name__)
 
     DEFAULT_REPR_KEY_LENGTH = 5
     DEFAULT_REPR_VALUE_LENGTH = 18
@@ -209,7 +212,7 @@ class Display(SurfaceMixin, CacherMixin, ABC):
         pass
 
     @staticmethod
-    def scale_image(image, scalar):
+    def scale_surface_image(image, scalar):
         width, height = image.size
         scaled_width, scaled_height = int(width * scalar), int(height * scalar)
         return image.resize((scaled_width, scaled_height))
@@ -286,13 +289,13 @@ class ScreenInfoMonitor(Display):
         """
         return (self.x, self.y, self.x + self.width, self.y + self.height)
 
-    def get_surface_image(self, scalar=None):
+    def get_surface_image(self, scalar=1):
         # Why doesn't this work?
         # image = ImageGrab.grab(bbox=self.bbox_data, all_screens=True)
         image = ImageGrab.grab(all_screens=True).crop(self.bbox_data)
-        return image if scalar is None else self.scale_image(image, scalar=scalar)
+        return self.scale_surface_image(image, scalar=scalar)
 
-    def get_np_image(self, scalar=None):
+    def get_np_image(self, scalar=1):
         return cv2.cvtColor(numpy.array(self.get_surface_image(scalar=scalar)), cv2.COLOR_BGR2RGB)
 
     def as_dict(self):
@@ -350,11 +353,11 @@ class MssMonitor(Display):
         """
         return {"left": self.x, "top": self.y, "width": self.width, "height": self.height}
 
-    def get_surface_image(self, scalar=None):
+    def get_surface_image(self, scalar=1):
         # doing this a little weird here
         sct_img = self.mms.grab(self.mss_sct_data)
         image = Image.frombytes('RGB', sct_img.size, sct_img.bgra, 'raw', 'BGRX')
-        return image if scalar is None else self.scale_image(image, scalar=scalar)
+        return self.scale_surface_image(image, scalar=scalar)
 
     def get_np_image(self, scalar=None):
         return cv2.cvtColor(numpy.array(self.get_surface_image(scalar=scalar)), cv2.COLOR_BGR2RGB)
@@ -375,7 +378,7 @@ def monitor_factory(subclass=MssMonitor):
 
         @property
         def filename(self):
-            return f"{dt_to_std_str(datetime.now())}_{subclass.__name__}_monitor_{self.index}.avi"
+            return f"{dt_to_std_str(datetime.now())}_{subclass.__name__}_{self.index}.avi"
         
         def record(self, filename=None, scalar=None, fps=20.0):
             if filename is None:
@@ -383,22 +386,28 @@ def monitor_factory(subclass=MssMonitor):
             super().record(filename=filename, scalar=scalar, fps=fps)
         
     return Monitor
-            
 
-class Camera(Device):
 
-    cache = {}
+class ApplicationScreen(Display):
 
-    def __init__(self, index):
-        self.index = index
+    def __init__(self, index, x, y, width, height) -> None:
+        super().__init__(index, x, y, width, height)
 
+    @classmethod
+    def get_all_devices(cls):
+        pass
+
+
+class Camera(Display):
+
+    def __init__(self, index, width, height) -> None:
+        super().__init__(index=index, x=0, y=0, width=width, height=height)
+        
         self.capture = None
         self.is_open = False
 
-        super().__init__(self.index)
-
     @classmethod
-    def get_all_devices(cls) -> [Camera]:
+    def get_all_devices(cls) -> [Self]:
         cls.logger.info("Retrieving cameras...")
         devices, index = [], 0
         while True:
@@ -410,8 +419,18 @@ class Camera(Device):
                     # stupid work around because cv2 doesn't have this implemented
                     capture = cv2.VideoCapture(index)  # this "opens" the camera, so it's being blocked from other apps
                     if capture.isOpened():             # if it can be opened, it's a camera
+                        
+                        _, frame = capture.read()
+                        width, height, _ = frame.shape
                         capture.release()
-                        devices.append(Camera(index))
+
+                        devices.append(
+                            cls(
+                                index=index,
+                                width=width,
+                                height=height
+                            )
+                        )
                         cls.logger.info(f" - found camera at index {index}")
                     else:
                         cls.logger.info(f"Camera index ends at {index}")
@@ -423,9 +442,6 @@ class Camera(Device):
                 break
         return devices
 
-    def get_default_device(self):
-        self.logger.error("implement this")
-
     def open(self):  # use __with__ method? TODO
         if not self.is_open:
             self.capture = cv2.VideoCapture(self.index)
@@ -436,23 +452,34 @@ class Camera(Device):
             self.capture.release()
             self.is_open = False
 
-    def get_surface_image(self, resize=False):
+    def get_surface_image(self, scalar=1):
         if self.is_open:
-            ret, frame = self.capture.read()
+            _, frame = self.capture.read()
+            # return self.scale_surface_image(frame, scalar=scalar)
             return frame
 
-    def get_np_image(self, resize=False):
-        image = self.get_surface_image(resize=resize)
-        return cv2.cvtColor(numpy.array(image), cv2.COLOR_BGR2RGB)
+    def get_np_image(self, scalar=1):
+        image = self.get_surface_image(scalar=scalar)
+        np_array = numpy.array(image, dtype=numpy.uint8)
+        # return cv2.cvtColor(np_array, cv2.COLOR_BGR2RGB)
+        return numpy.array(image)
 
-    def get_live_view(self, resize=False):
+    def get_live_view(self, scalar=1):
         self.open()
-        while True:
-            cv2.imshow('frame', self.get_surface_image())
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+        super().get_live_view(scalar=scalar)
         self.close()
+    
+    @property
+    def filename(self):
+        return f"{dt_to_std_str(datetime.now())}_{self.__class__.__name__}_{self.index}.avi"
 
+    def record(self, filename=None, scalar=1, fps=20.0):
+        self.open()
+        if filename is None:
+            filename = self.filename
+        super().record(filename=filename, scalar=scalar, fps=fps)
+        self.close()
+    
 
 class Chromecast(Display):
 

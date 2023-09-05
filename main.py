@@ -25,5 +25,5 @@ def test_monitors():
 
 
 if __name__ == '__main__':
-    # test_cameras()
-    test_monitors()
+    test_cameras()
+    # test_monitors()
