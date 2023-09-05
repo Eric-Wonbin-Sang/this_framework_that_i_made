@@ -1,5 +1,5 @@
 import numpy
-from things.audio import Microphone, Speaker, Visualizer
+from things.audio import AudioGraphVisualizer, Microphone, Speaker
 from things.video import (Camera, MssMonitor, ScreenInfoMonitor,
                           monitor_factory, ChromecastMonitor)
 
@@ -10,8 +10,7 @@ def test_speakers():
     Speaker.print_cache()
 
     speaker = Speaker.search_for("Main Output 1/2 (Audient EVO8)")
-    visualizer = Visualizer(speaker, 20)
-    visualizer.show()
+    AudioGraphVisualizer.show(speaker, band_count=20)
 
     # speaker_stream = speaker.get_audio_stream()
     # for _ in range(1000):
@@ -26,11 +25,13 @@ def test_mics():
     Microphone.print_cache()
 
     microphone = Microphone.search_for("Mic | Line 1/2 (Audient EVO8)")
-    microphone_stream = microphone.get_audio_stream()
-    for _ in range(1000):
-        microphone_data = microphone_stream.read(Microphone.chunk_size)
-        microphone_audio_array = numpy.frombuffer(microphone_data, dtype=numpy.int16)
-        print("microphone_stream:", microphone_audio_array)
+    AudioGraphVisualizer.show(microphone, band_count=20)
+
+    # microphone_stream = microphone.get_audio_stream()
+    # for _ in range(1000):
+    #     microphone_data = microphone_stream.read(Microphone.chunk_size)
+    #     microphone_audio_array = numpy.frombuffer(microphone_data, dtype=numpy.int16)
+    #     print("microphone_stream:", microphone_audio_array)
 
     # audio = Speaker.get_default_device()
     # print(audio)
@@ -66,8 +67,8 @@ def test_chromecasts():
 
 
 if __name__ == '__main__':
-    # test_speakers()
+    test_speakers()
     test_mics()
-    # test_monitors()
-    # test_cameras()
-    # test_chromecasts()
+    test_monitors()
+    test_cameras()
+    test_chromecasts()

@@ -18,7 +18,7 @@ import screeninfo
 from mss import mss
 from PIL import Image, ImageGrab
 
-from things.device import CacherMixin, Device
+from things.device import Device
 from things.functions import dt_to_std_str, repr_helper
 
 
@@ -90,69 +90,6 @@ class SurfaceMixin(ABC):
 
         recorder.output.release()
         cv2.destroyAllWindows()
-
-
-class Recorder:
-
-    def __init__(self, filepath, fps, width, height, codec) -> None:
-        self.filepath = filepath
-        self.codec = codec
-        self.fps = fps
-        self.width = width
-        self.height = height
-
-    @cached_property
-    def resolution(self):
-        return (self.width, self.height)
-    
-    @cached_property
-    def output(self):
-        return cv2.VideoWriter(self.filepath, self.codec, self.fps, self.resolution)
-
-    def write(self, frame):
-        """ Input an image as a np array to write to the file. """
-        self.output.write(frame)
-
-    def record(self, surface: SurfaceMixin, scalar):
-        while True:
-
-            start_time = datetime.now()
-
-            frame = surface.get_np_image(scalar=scalar)
-            self.output.write(frame)
-            cv2.imshow('Screen Recorder', frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
-            print(self)
-            height, width, channels = frame.shape
-            print(f"width={width}, height={height}, channels={channels}")
-
-            end_time = datetime.now()
-            elapsed_time = (end_time - start_time).microseconds / 1_000_000
-            print(f"{1/elapsed_time:.2f} fps")
-
-        self.output.release()
-        cv2.destroyAllWindows()
-
-    def as_dict(self):
-        return {
-            "filepath": self.filepath,
-            "codec": self.codec,
-            "fps": self.fps,
-            "resolution": self.resolution
-        }
-
-    def __repr__(self):
-        return repr_helper(self)
-
-
-class XvidRecorder(Recorder):
-    
-    """ An unfortunate name, revise. TODO """
-
-    def __init__(self, filepath, fps, width, height) -> None:
-        super().__init__(filepath, fps, width, height, codec=cv2.VideoWriter_fourcc(*'XVID'))
 
 
 class DisplayType(enum.Enum):
@@ -588,3 +525,68 @@ class ChromecastMonitor(Display):
                 "manufacturer": self.manufacturer
             }
         }
+
+
+class Recorder:
+
+    """ Not sure if I should do it like this or like the visualizer. TODO """
+
+    def __init__(self, filepath, fps, width, height, codec) -> None:
+        self.filepath = filepath
+        self.codec = codec
+        self.fps = fps
+        self.width = width
+        self.height = height
+
+    @cached_property
+    def resolution(self):
+        return (self.width, self.height)
+    
+    @cached_property
+    def output(self):
+        return cv2.VideoWriter(self.filepath, self.codec, self.fps, self.resolution)
+
+    def write(self, frame):
+        """ Input an image as a np array to write to the file. """
+        self.output.write(frame)
+
+    def record(self, surface: SurfaceMixin, scalar):
+        while True:
+
+            start_time = datetime.now()
+
+            frame = surface.get_np_image(scalar=scalar)
+            self.output.write(frame)
+            cv2.imshow('Screen Recorder', frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+            print(self)
+            height, width, channels = frame.shape
+            print(f"width={width}, height={height}, channels={channels}")
+
+            end_time = datetime.now()
+            elapsed_time = (end_time - start_time).microseconds / 1_000_000
+            print(f"{1/elapsed_time:.2f} fps")
+
+        self.output.release()
+        cv2.destroyAllWindows()
+
+    def as_dict(self):
+        return {
+            "filepath": self.filepath,
+            "codec": self.codec,
+            "fps": self.fps,
+            "resolution": self.resolution
+        }
+
+    def __repr__(self):
+        return repr_helper(self)
+
+
+class XvidRecorder(Recorder):
+    
+    """ An unfortunate name, revise. TODO """
+
+    def __init__(self, filepath, fps, width, height) -> None:
+        super().__init__(filepath, fps, width, height, codec=cv2.VideoWriter_fourcc(*'XVID'))
