@@ -4,8 +4,9 @@ import pyautogui
 
 from PIL import ImageGrab
 
-from audio import Speaker
-from video import Display
+from things.audio import Speaker
+from things.video import Display
+
 
 
 def example_0():
@@ -60,17 +61,9 @@ def example_0():
     cv2.destroyAllWindows()
 
 
-def scratch_paper():
-
-    # example_0()
-
-    print(Display.get_all_devices())
-
-
 def main():
-    pass
+    example_0()
 
 
 if __name__ == '__main__':
-    scratch_paper()
-    # main()
+    main()
