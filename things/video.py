@@ -13,6 +13,7 @@ from typing import Self
 
 import cv2
 import numpy
+import pychromecast
 import screeninfo
 from mss import mss
 from PIL import Image, ImageGrab
@@ -43,14 +44,14 @@ class SurfaceMixin(ABC):
         return int(self.height * scalar)
 
     @abstractmethod
-    def get_surface_image(self, scalar=None):
+    def get_surface_image(self, scalar=1):
         pass
 
     @abstractmethod
-    def get_np_image(self, scalar=None):
+    def get_np_image(self, scalar=1):
         pass
 
-    def get_live_view(self, scalar=None):
+    def get_live_view(self, scalar=1):
         try:
             while True:
                 np_image = self.get_np_image(scalar=scalar)
@@ -61,7 +62,7 @@ class SurfaceMixin(ABC):
             pass
         cv2.destroyAllWindows()
 
-    def record(self, filename, scalar=None, fps=20.0):
+    def record(self, filename, scalar=1, fps=20.0):
         # we have to keep track of scaling between the recorder initializing and
         # the frame retrival. Try to marry the two to just one specification. TODO
         recorder = XvidRecorder(
@@ -359,8 +360,9 @@ class MssMonitor(Display):
         image = Image.frombytes('RGB', sct_img.size, sct_img.bgra, 'raw', 'BGRX')
         return self.scale_surface_image(image, scalar=scalar)
 
-    def get_np_image(self, scalar=None):
-        return cv2.cvtColor(numpy.array(self.get_surface_image(scalar=scalar)), cv2.COLOR_BGR2RGB)
+    def get_np_image(self, scalar=1):
+        np_image = numpy.array(self.get_surface_image(scalar=scalar))
+        return cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
 
 
 def monitor_factory(subclass=MssMonitor):
@@ -380,7 +382,7 @@ def monitor_factory(subclass=MssMonitor):
         def filename(self):
             return f"{dt_to_std_str(datetime.now())}_{subclass.__name__}_{self.index}.avi"
         
-        def record(self, filename=None, scalar=None, fps=20.0):
+        def record(self, filename=None, scalar=1, fps=20.0):
             if filename is None:
                 filename = self.filename
             super().record(filename=filename, scalar=scalar, fps=fps)
@@ -479,11 +481,77 @@ class Camera(Display):
             filename = self.filename
         super().record(filename=filename, scalar=scalar, fps=fps)
         self.close()
-    
 
-class Chromecast(Display):
+
+class ChromecastSpeaker:
+    pass
+
+
+class ChromecastMonitor(Display):
 
     # https://pypi.org/project/PyChromecast/
+
+    def __init__(self, index, width, height, services, uuid, model_name, friendly_name, host, port, cast_type, manufacturer) -> None:
+        
+        super().__init__(index=index, x=0, y=0, width=width, height=height)
+
+        self.services = services
+        self.uuid = uuid
+        self.model_name = model_name
+        self.friendly_name = friendly_name
+        self.host = host
+        self.port = port
+        self.cast_type = cast_type
+        self.manufacturer = manufacturer
+
+    @classmethod
+    def get_all_devices(cls) -> [Self]:
+
+
+        devices = []
+        services, browser = pychromecast.discovery.discover_chromecasts()
+        # Shut down discovery
+        for i, cast_info in enumerate(services):
+            width = 1
+            height = 1
+            devices.append(
+                cls(
+                    index=i,
+                    width=width,
+                    height=height,
+                    services=cast_info.services,
+                    uuid=cast_info.uuid,
+                    model_name=cast_info.model_name,
+                    friendly_name=cast_info.friendly_name,
+                    host=cast_info.host,
+                    port=cast_info.port,
+                    cast_type=cast_info.cast_type,
+                    manufacturer=cast_info.manufacturer,
+                )
+            )
+        pychromecast.discovery.stop_discovery(browser)
+        return devices
+
+    def get_surface_image(self, scalar=1):
+        pass
+
+    def get_np_image(self, scalar=1):
+        pass
+
+    def as_dict(self):
+        return {
+            **super().as_dict(),
+            **{
+                "services": self.services,
+                "uuid": self.uuid,
+                "model_name": self.model_name,
+                "friendly_name": self.friendly_name,
+                "host": self.host,
+                "port": self.port,
+                "cast_type": self.cast_type,
+                "manufacturer": self.manufacturer
+            }
+        }
 
     # import time
     # import pychromecast

@@ -1,13 +1,14 @@
 from things.audio import Speaker
 from things.video import (Camera, MssMonitor, ScreenInfoMonitor,
-                          monitor_factory)
+                          monitor_factory, ChromecastMonitor)
 
 
-def test_cameras():
-    
-    for camera in Camera.get_all_devices():
-        print(camera)
-        camera.get_live_view()
+def test_speakers():
+    pass
+
+
+def test_mics():
+    pass
 
 
 def test_monitors():
@@ -24,6 +25,19 @@ def test_monitors():
             monitor.record(scalar=scalar)
 
 
+def test_cameras():
+    
+    for camera in Camera.get_all_devices():
+        print(camera)
+        camera.get_live_view()
+
+
+def test_chromecasts():
+    for chromecast in ChromecastMonitor.get_all_devices():
+        print(chromecast)
+
+
 if __name__ == '__main__':
-    test_cameras()
     # test_monitors()
+    # test_cameras()
+    test_chromecasts()
