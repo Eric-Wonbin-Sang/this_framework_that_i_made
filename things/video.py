@@ -2,56 +2,85 @@
 from __future__ import annotations
 
 import datetime
+import enum
+import os
+from abc import ABC, abstractmethod
+from datetime import datetime
+from fractions import Fraction
+from functools import cached_property
 
 import cv2
-import enum
 import numpy
-import logging
-import pyautogui
 import screeninfo
-import pygetwindow
-
+from mss import mss
 from PIL import Image, ImageGrab
-from fractions import Fraction
 
-from things.device import Device
-
-
-class DisplayType(enum.Enum):
-    Horizontal = "horizontal"
-    Vertical = "vertical"
+from things.device import CacherMixin, Device
+from things.functions import dt_to_std_str, repr_helper
 
 
-class SurfaceMixin:
+class SurfaceMixin(ABC):
 
     """ A mixin class for things that have some surface with content that should have image functions. """
 
-    def get_surface_image(self, resize=False):
-        raise Exception(f"{self.__class__.__name__} base method called, should be a child's method.")
+    OUTPUT_DIR = "output"
 
-    def get_np_image(self, resize=False):
-        raise Exception(f"{self.__class__.__name__} base method called, should be a child's method.")
+    def __init__(self, x, y, width, height) -> None:
+        
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
 
-    def record(self, seconds, resize=False):
-        filename = f"output\\monitor_{self.index}_recording.avi"
-        resolution = (self.width, self.height)
-        codec = cv2.VideoWriter_fourcc(*"XVID")
-        fps = 60.0
+        super().__init__()
 
-        print(f"Recording monitor {self.index}: saving to {filename}")
+    def get_scaled_width(self, scalar=1):
+        return int(self.width * scalar)
+    
+    def get_scaled_height(self, scalar=1):
+        return int(self.height * scalar)
 
-        result = cv2.VideoWriter(filename, codec, fps, resolution)
-        init_dt = datetime.datetime.now()
-        while ((now := datetime.datetime.now()) - init_dt).seconds < seconds:
-            print(now)
-            frame = self.get_np_image(resize=resize)
-            result.write(frame)
-        result.release()
+    @abstractmethod
+    def get_surface_image(self, scalar=None):
+        pass
 
-    def get_live_view(self, resize=False):
+    @abstractmethod
+    def get_np_image(self, scalar=None):
+        pass
+
+    def record(self, filename, scalar=None, fps=20.0):
+        # we have to keep track of slacing between the recorder initializing and
+        # the frame retrival. Try to marry the two to just one specification. TODO
+        recorder = XvidRecorder(
+            filepath=os.path.join(self.OUTPUT_DIR, filename),
+            fps=fps, 
+            width=self.get_scaled_width(scalar=scalar), 
+            height=self.get_scaled_height(scalar=scalar),
+        )
+        while True:
+            start_time = datetime.now()
+
+            frame = self.get_np_image(scalar=scalar)
+            recorder.output.write(frame)
+            cv2.imshow('Screen Recorder', frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+            height, width, channels = frame.shape
+            end_time = datetime.now()
+            elapsed_time = (end_time - start_time).microseconds / 1_000_000
+
+            print(recorder)
+            print(f"width={width}, height={height}, channels={channels}")
+            print(f"{1/elapsed_time:.2f} fps")
+
+        recorder.output.release()
+        cv2.destroyAllWindows()
+
+    def get_live_view(self, scalar=None):
         try:
             while True:
-                np_image = self.get_np_image(resize=resize)
+                np_image = self.get_np_image(scalar=scalar)
                 cv2.imshow("Captured Window", np_image)
                 if cv2.waitKey(1) == ord('q'):
                     break
@@ -60,64 +89,301 @@ class SurfaceMixin:
         cv2.destroyAllWindows()
 
 
-class Display(Device, SurfaceMixin):  # I might want to change this to DisplayDevice? TODO
+class Recorder:
 
-    logger = logging.getLogger(__name__)
+    def __init__(self, filepath, fps, width, height, codec) -> None:
+        self.filepath = filepath
+        self.codec = codec
+        self.fps = fps
+        self.width = width
+        self.height = height
 
-    cache = {}
+    @cached_property
+    def resolution(self):
+        return (self.width, self.height)
+    
+    @cached_property
+    def output(self):
+        return cv2.VideoWriter(self.filepath, self.codec, self.fps, self.resolution)
 
-    def __init__(self, index, data):
+    def write(self, frame):
+        """ Input an image as a np array to write to the file. """
+        self.output.write(frame)
+
+    def record(self, surface: SurfaceMixin, scalar):
+        while True:
+
+            start_time = datetime.now()
+
+            frame = surface.get_np_image(scalar=scalar)
+            self.output.write(frame)
+            cv2.imshow('Screen Recorder', frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+            print(self)
+            height, width, channels = frame.shape
+            print(f"width={width}, height={height}, channels={channels}")
+
+            end_time = datetime.now()
+            elapsed_time = (end_time - start_time).microseconds / 1_000_000
+            print(f"{1/elapsed_time:.2f} fps")
+
+        self.output.release()
+        cv2.destroyAllWindows()
+
+    def as_dict(self):
+        return {
+            "filepath": self.filepath,
+            "codec": self.codec,
+            "fps": self.fps,
+            "resolution": self.resolution
+        }
+
+    def __repr__(self):
+        return repr_helper(self)
+
+
+class XvidRecorder(Recorder):
+    
+    """ An unfortunate name, revise. TODO """
+
+    def __init__(self, filepath, fps, width, height) -> None:
+        super().__init__(filepath, fps, width, height, codec=cv2.VideoWriter_fourcc(*'XVID'))
+
+
+class DisplayType(enum.Enum):
+    Horizontal = "horizontal"
+    Vertical = "vertical"
+
+
+class Display(SurfaceMixin, CacherMixin, ABC):
+
+    """
+    Is a monitor a display or is a display a monitor?
+
+    The terms "monitor" and "display" are often used interchangeably, but they can refer to different things 
+    depending on the context:
+
+    Monitor
+    A monitor typically refers to the whole unit that includes the display screen, the casing around it, and 
+    other components like ports, speakers, or other built-in peripherals. Monitors are generally designed to 
+    be connected to a separate computer or device. They may have various input options like HDMI, VGA, 
+    DisplayPort, and sometimes even built-in speakers or USB hubs.
+
+    Display
+    The term "display" often refers to the actual screen where the images and videos are rendered. This could 
+    be part of a monitor, television, smartphone, or any other device with a screen. In some contexts, 
+    "display" can also refer to the whole unit (like a monitor), especially when discussing types of technology 
+    (e.g., LED display, OLED display).
+
+    Summary
+    If you say a "monitor is a display," you would generally be understood to mean that a monitor contains a 
+    display as one of its components.
+
+    If you say a "display is a monitor," it might be less accurate because a display is just the screen 
+    component, whereas a monitor includes additional elements like casing, ports, and sometimes speakers.
+
+    So, in essence, all monitors have displays, but not all displays are monitors.
+
+    --
+    Sincerely,
+    Bot (2023.09.04 ChatGPT-4)
+    
+    """
+
+    DEFAULT_REPR_KEY_LENGTH = 5
+    DEFAULT_REPR_VALUE_LENGTH = 18
+
+    def __init__(self, index, x, y, width, height) -> None:
 
         self.index = index
 
-        self.x = data.get("x")
-        self.y = data.get("y")
-        self.width = data.get("width")
-        self.height = data.get("height")
-        self.width_mm = data.get("width_mm")  # not sure how these are calculated
-        self.height_mm = data.get("height_mm")
-        self.is_primary = data.get("is_primary")
+        super().__init__(x, y, width, height)
 
         self.orientation = DisplayType.Horizontal if self.width > self.height else DisplayType.Vertical
         self.aspect_ratio = Fraction(self.width, self.height)
 
-        super().__init__(name=data.get("name"))
+    @abstractmethod
+    def get_surface_image(self, scalar):
+        pass
+
+    @staticmethod
+    def scale_image(image, scalar):
+        width, height = image.size
+        scaled_width, scaled_height = int(width * scalar), int(height * scalar)
+        return image.resize((scaled_width, scaled_height))
+    
+    def as_dict(self):
+        return {    
+            "index": self.index,        
+            "x": self.x,
+            "y": self.y,
+            "width": self.width,
+            "height": self.height,
+            "orientation": self.orientation,
+            "aspect_ratio": self.aspect_ratio
+        }
+    
+    def __repr__(self) -> str:
+        """ A hilariously dumb way of trying to convince someone the CacheMixin is good. """
+        if not (instances := self.cache[self.__class__]):
+            return f"{self.__class__.__name__}({', '.join(str(k) + '=' + str(v) for k, v in self.as_dict().items())})"
+        max_key_lens, max_value_lens = [], []
+        for _, instance in instances.items():
+            max_key_lens = [
+                max(max_key_lens[i] if max_key_lens else self.DEFAULT_REPR_KEY_LENGTH, len(str(k))) 
+                for i, k in enumerate(instance.as_dict().keys())
+            ]
+            max_value_lens = [
+                max(max_value_lens[i] if max_value_lens else self.DEFAULT_REPR_VALUE_LENGTH, len(str(v))) 
+                for i, v in enumerate(instance.as_dict().values())
+            ]
+        return "{}({})".format(
+            self.__class__.__name__,
+            ", ".join(
+                f"{str(k).rjust(max_key_lens[i])}={str(v).ljust(max_value_lens[i])}"
+                for i, (k, v) in enumerate(self.as_dict().items())
+            )
+        )
+
+
+class ScreenInfoMonitor(Display):
+
+    def __init__(self, index, x, y, width, height, width_mm, height_mm) -> None:
+        super().__init__(index, x, y, width, height)
+        self.width_mm = width_mm  # can these be calculated?
+        self.height_mm = height_mm
 
     @classmethod
     def get_all_devices(cls):
-        devices = []
-        for i, m in enumerate(screeninfo.get_monitors()):
-            if device := cls.cache.get(m.__dict__["name"]):
-                devices.append(device)
-            else:
-                devices.append(device := cls(i, m.__dict__))  # could I inherit this class? TODO
-                cls.cache[device.name] = device
+        devices = [
+            cls(
+                index=i,
+                x=m.__dict__["x"], 
+                y=m.__dict__["y"], 
+                width=m.__dict__["width"], 
+                height=m.__dict__["height"], 
+                width_mm=m.__dict__["width_mm"], 
+                height_mm=m.__dict__["height_mm"]
+            )
+            for i, m in enumerate(screeninfo.get_monitors())
+        ]
         # I want to shift all the coordinates so that the least x y value is (0, 0) for cropping the full screenshot
         max_negative_x, max_negative_y = min(d.x for d in devices), min(d.y for d in devices)  # optimize TODO
         for device in devices:
             device.x += abs(max_negative_x)
             device.y += abs(max_negative_y)
         return devices
+    
+    @cached_property
+    def bbox_data(self):
+        """ A placeholder for a TODO.
 
-    def get_default_device(self):
-        for device in self.get_all_devices():
-            if device.is_primary:
-                return device
-        self.logger.error(f"This is weird, no default {self.__class__.__name__} instance?")
+        Note:
+            I need to change this if I want to allow for removing displays or I can try to refresh the 
+            left and top values based on some thread that checks for it? Threading is going to be annoying.
+        """
+        return (self.x, self.y, self.x + self.width, self.y + self.height)
 
-    def get_surface_image(self, resize=False):
-        image = ImageGrab.grab(all_screens=True).crop((self.x, self.y, self.x + self.width, self.y + self.height))
-        if not resize:
-            return image
-        scalar = 800 // max(self.aspect_ratio.numerator, self.aspect_ratio.denominator)
-        return image.resize(
-            (self.aspect_ratio.numerator * scalar, self.aspect_ratio.denominator * scalar)
-        )
+    def get_surface_image(self, scalar=None):
+        # Why doesn't this work?
+        # image = ImageGrab.grab(bbox=self.bbox_data, all_screens=True)
+        image = ImageGrab.grab(all_screens=True).crop(self.bbox_data)
+        return image if scalar is None else self.scale_image(image, scalar=scalar)
 
-    def get_np_image(self, resize=False):
-        image = self.get_surface_image(resize=resize)
-        return cv2.cvtColor(numpy.array(image), cv2.COLOR_BGR2RGB)
+    def get_np_image(self, scalar=None):
+        return cv2.cvtColor(numpy.array(self.get_surface_image(scalar=scalar)), cv2.COLOR_BGR2RGB)
 
+    def as_dict(self):
+        return {
+            **super().as_dict(),  # yeah I'm extra
+            **{
+                "width_mm": self.width_mm,
+                "height_mm": self.height_mm
+            }
+        }
+
+
+class MssMonitor(Display):
+
+    """ 
+    A mixin class for sourcing Displays via MSS.
+
+    Such a faster module than PIL.ImageGrab.
+    
+    Note:
+        BofA Zequan says:
+            "Class names be should Pascal Case and any acronyms should only uppercase the first letter."
+    """
+
+    IGNORE_FULL_DISPLAY = True  # the first monitor data shows all monitors as one screen.
+
+    # doing this a little weird here
+    mms = mss()
+    
+    @classmethod
+    def get_all_devices(cls):
+        with mss() as sct:
+            # all monitors are a dict: {'left': 0, 'top': 0, 'width': 2560, 'height': 1440}
+            return [
+                cls(
+                    index=i,
+                    x=monitor["left"], 
+                    y=monitor["top"], 
+                    width=monitor["width"], 
+                    height=monitor["height"]
+                )
+                for i, monitor in enumerate(
+                    sct.monitors if not cls.IGNORE_FULL_DISPLAY
+                    else sct.monitors[1:]
+                )
+            ]
+
+    @cached_property
+    def mss_sct_data(self):
+        """ A placeholder for a TODO.
+
+        Note:
+            I need to change this if I want to allow for removing displays or I can try to refresh the 
+            left and top values based on some thread that checks for it? Threading is going to be annoying.
+        """
+        return {"left": self.x, "top": self.y, "width": self.width, "height": self.height}
+
+    def get_surface_image(self, scalar=None):
+        # doing this a little weird here
+        sct_img = self.mms.grab(self.mss_sct_data)
+        image = Image.frombytes('RGB', sct_img.size, sct_img.bgra, 'raw', 'BGRX')
+        return image if scalar is None else self.scale_image(image, scalar=scalar)
+
+    def get_np_image(self, scalar=None):
+        return cv2.cvtColor(numpy.array(self.get_surface_image(scalar=scalar)), cv2.COLOR_BGR2RGB)
+
+
+def monitor_factory(subclass=MssMonitor):
+
+    if not issubclass(subclass, Display):
+         raise Exception(f"subclass {subclass} is not a subclass of {Display.__name__}")
+    
+    class Monitor(subclass):
+        
+        """
+        This represents the current machine's displays. It should inherit from any subclass of Display.
+
+        Not sure how to do this correctly, probably has something TODO with __new__.
+        """
+
+        @property
+        def filename(self):
+            return f"{dt_to_std_str(datetime.now())}_{subclass.__name__}_monitor_{self.index}.avi"
+        
+        def record(self, filename=None, scalar=None, fps=20.0):
+            if filename is None:
+                filename = self.filename
+            super().record(filename=filename, scalar=scalar, fps=fps)
+        
+    return Monitor
+            
 
 class Camera(Device):
 
