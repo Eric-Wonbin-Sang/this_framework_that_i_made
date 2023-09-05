@@ -21,8 +21,6 @@ class AudioDevice(Device):  # I might want to change this to Audio TODO
 
     p = pyaudio.PyAudio()
 
-    cache = {}  # this caches every audio device child instance as an audio device object. Might want to change. TODO
-
     audio_type = None
     chunk_size = 99999999  # placeholder
 
@@ -109,7 +107,6 @@ class AudioDevice(Device):  # I might want to change this to Audio TODO
 
 class Microphone(AudioDevice):
 
-    cache = {}
     audio_type = AudioDeviceType.Input
     chunk_size = 1024
 
@@ -124,7 +121,6 @@ class Microphone(AudioDevice):
 
 class Speaker(AudioDevice):
 
-    cache = {}
     audio_type = AudioDeviceType.Output
     chunk_size = 512
 
@@ -133,7 +129,9 @@ class Speaker(AudioDevice):
         self.loopback_device = self.get_loopback_device()
 
     def get_loopback_device(self):
-        for name, device in LoopbackSpeaker.cache.items():
+        if not LoopbackSpeaker.get_cache():
+            LoopbackSpeaker.populate_cache()
+        for name, device in LoopbackSpeaker.get_cache().items():
             if self.name in name:
                 return device
 
@@ -175,7 +173,6 @@ class LoopbackSpeaker(AudioDevice):
         Simplify this class structure with a mixin TODO
     """
 
-    cache = {}
     audio_type = AudioDeviceType.Input  # See parent method docs
     chunk_size = 1024
 
@@ -210,106 +207,65 @@ class Visualizer:
         ).astype(int)
         return [(start_freq, end_freq) for start_freq, end_freq in zip(freq_bands[:-1], freq_bands[1:])]
 
-    # def show(self):
-    #
-    #     fig, ax = plt.subplots()
-    #     ax.set_ylim(0, 1)
-    #     ax.set_xlim(-0.5, self.band_count - 0.5)
-    #     ax.set_xlabel('Frequency Band')
-    #     ax.set_ylabel('Magnitude')
-    #
-    #     x = numpy.arange(self.band_count)  # x-axis values for the bars
-    #     bars = ax.bar(x, numpy.zeros(self.band_count), align='center')
-    #
-    #     fig.show()
-    #
-    #     stream = self.audio_device.get_audio_stream()
-    #     while True:
-    #         data = stream.read(self.audio_device.chunk_size)
-    #         data_np = numpy.frombuffer(data, dtype=numpy.int16)  # len = self.chunk_size * 2 = 1024
-    #         fft_result = numpy.fft.fft(data_np)  # len = 1024
-    #
-    #         # we divide fft_result in half bc the second half is a negated mirror of the first half
-    #         fft_magnitudes = numpy.abs(fft_result[:self.audio_device.chunk_size // 2])
-    #
-    #         band_magnitudes = []
-    #         for (start_freq, end_freq) in self.frequency_bands:
-    #             # average(all the frequencies in the range)
-    #             if not numpy.isnan(amplitude := numpy.mean(fft_magnitudes[start_freq:end_freq])):
-    #                 band_magnitudes.append(amplitude / 100000)
-    #             else:
-    #                 band_magnitudes.append(0)
-    #
-    #         print(band_magnitudes)
-    #
-    #         # Update the equalizer bars with new magnitudes
-    #         for bar, magnitude in zip(bars, band_magnitudes):
-    #             bar.set_height(magnitude)
-    #
-    #         # Redraw the plot
-    #         fig.canvas.draw()
-    #         fig.canvas.flush_events()
-
     def show(self):
-
-        plt.ion()  # enable interactivity
-        fig = plt.figure()
-
+    
+        fig, ax = plt.subplots()
+        ax.set_ylim(0, 1)
+        ax.set_xlim(-0.5, self.band_count - 0.5)
+        ax.set_xlabel('Frequency Band')
+        ax.set_ylabel('Magnitude')
+    
+        x = numpy.arange(self.band_count)  # x-axis values for the bars
+        bars = ax.bar(x, numpy.zeros(self.band_count), align='center')
+    
+        fig.show()
+    
         stream = self.audio_device.get_audio_stream()
         while True:
-            data = numpy.fromstring(stream.read(self.audio_device.chunk_size), dtype=numpy.int16)
-            data = data * numpy.hanning(len(data))  # smooth the FFT by windowing data
-
-            fft = abs(numpy.fft.fft(data).real)
-            fft = fft[:int(len(fft) / 2)]  # keep only first half
-            freq = numpy.fft.fftfreq(self.audio_device.chunk_size, 1.0 / self.audio_device.default_sample_rate)
-            freq = freq[:int(len(freq) / 2)]  # keep only first half
-            # freqPeak = freq[numpy.where(fft == numpy.max(fft))[0][0]] + 1
-
-            print(freq)
-
-            plt.clf()
-            plt.plot(data, '-', rasterized=True, color='b')
+            data = stream.read(self.audio_device.chunk_size)
+            data_np = numpy.frombuffer(data, dtype=numpy.int16)  # len = self.chunk_size * 2 = 1024
+            fft_result = numpy.fft.fft(data_np)  # len = 1024
+    
+            # we divide fft_result in half bc the second half is a negated mirror of the first half
+            fft_magnitudes = numpy.abs(fft_result[:self.audio_device.chunk_size // 2])
+    
+            band_magnitudes = []
+            for (start_freq, end_freq) in self.frequency_bands:
+                # average(all the frequencies in the range)
+                if not numpy.isnan(amplitude := numpy.mean(fft_magnitudes[start_freq:end_freq])):
+                    band_magnitudes.append(amplitude / 100000)
+                else:
+                    band_magnitudes.append(0)
+    
+            print(band_magnitudes)
+    
+            # Update the equalizer bars with new magnitudes
+            for bar, magnitude in zip(bars, band_magnitudes):
+                bar.set_height(magnitude)
+    
+            # Redraw the plot
             fig.canvas.draw()
-            plt.pause(0.1)
+            fig.canvas.flush_events()
 
+    # def show(self):
 
-LoopbackSpeaker.populate_cache()  # this is a bandaid to the speaker loopback problem TODO
+    #     plt.ion()  # enable interactivity
+    #     fig = plt.figure()
 
+    #     stream = self.audio_device.get_audio_stream()
+    #     while True:
+    #         data = numpy.fromstring(stream.read(self.audio_device.chunk_size), dtype=numpy.int16)
+    #         data = data * numpy.hanning(len(data))  # smooth the FFT by windowing data
 
-def test_microphone_stream():
-    microphone = Microphone.search_for("Mic | Line 1/2 (Audient EVO8)")
-    microphone_stream = microphone.get_audio_stream()
-    for _ in range(1000):
-        microphone_data = microphone_stream.read(Microphone.chunk_size)
-        microphone_audio_array = numpy.frombuffer(microphone_data, dtype=numpy.int16)
-        print("microphone_stream:", microphone_audio_array)
+    #         fft = abs(numpy.fft.fft(data).real)
+    #         fft = fft[:int(len(fft) / 2)]  # keep only first half
+    #         freq = numpy.fft.fftfreq(self.audio_device.chunk_size, 1.0 / self.audio_device.default_sample_rate)
+    #         freq = freq[:int(len(freq) / 2)]  # keep only first half
+    #         # freqPeak = freq[numpy.where(fft == numpy.max(fft))[0][0]] + 1
 
+    #         # print(freq)
 
-def test_speaker_stream():
-    speaker = Speaker.search_for("Main Output 1/2 (Audient EVO8)")
-    visualizer = Visualizer(speaker, 20)
-    visualizer.show()
-
-    speaker_stream = speaker.get_audio_stream()
-    for _ in range(1000):
-        speaker_data = speaker_stream.read(Speaker.chunk_size)
-        speaker_audio_array = numpy.frombuffer(speaker_data, dtype=numpy.int16)
-        print("speaker_stream:", speaker_audio_array)
-
-
-def main():
-
-    for audio_device_type in AudioDevice.__subclasses__():
-        audio_device_type.populate_cache()
-        audio_device_type.print_cache()
-
-    # test_microphone_stream()
-    test_speaker_stream()
-
-    audio = Speaker.get_default_device()
-    print(audio)
-
-
-if __name__ == '__main__':
-    main()
+    #         plt.clf()
+    #         plt.plot(data, '-', rasterized=True, color='b')
+    #         fig.canvas.draw()
+    #         plt.pause(0.1)
