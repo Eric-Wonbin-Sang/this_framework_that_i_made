@@ -14,7 +14,11 @@ from typing import Self
 import cv2
 import numpy
 import pychromecast
+import pygetwindow
 import screeninfo
+import win32con
+import win32gui
+import win32ui
 from mss import mss
 from PIL import Image, ImageGrab
 
@@ -30,12 +34,28 @@ class SurfaceMixin(ABC):
 
     def __init__(self, x, y, width, height) -> None:
         
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
+        self._x = x
+        self._y = y
+        self._width = width
+        self._height = height
 
         super().__init__()
+
+    @property
+    def x(self):
+        return self._x
+    
+    @property
+    def y(self):
+        return self._y
+    
+    @property
+    def width(self):
+        return self._width
+    
+    @property
+    def height(self):
+        return self._height
 
     def get_scaled_width(self, scalar=1):
         return int(self.width * scalar)
@@ -223,8 +243,9 @@ class ScreenInfoMonitor(Display):
         """ A placeholder for a TODO.
 
         Note:
-            I need to change this if I want to allow for removing displays or I can try to refresh the 
-            left and top values based on some thread that checks for it? Threading is going to be annoying.
+            I need to change this if I want to allow for removing displays or I can try 
+            to refresh the left and top values based on some thread that checks for it? 
+            Threading is going to be annoying.
         """
         return (self.x, self.y, self.x + self.width, self.y + self.height)
 
@@ -235,7 +256,8 @@ class ScreenInfoMonitor(Display):
         return self.scale_surface_image(image, scalar=scalar)
 
     def get_np_image(self, scalar=1):
-        return cv2.cvtColor(numpy.array(self.get_surface_image(scalar=scalar)), cv2.COLOR_BGR2RGB)
+        np_array = numpy.array(self.get_surface_image(scalar=scalar))
+        return cv2.cvtColor(np_array, cv2.COLOR_BGR2RGB)
 
     def as_dict(self):
         return {
@@ -328,16 +350,6 @@ def monitor_factory(subclass=MssMonitor):
     return Monitor
 
 
-class ApplicationScreen(Display):
-
-    def __init__(self, index, x, y, width, height) -> None:
-        super().__init__(index, x, y, width, height)
-
-    @classmethod
-    def get_all_devices(cls):
-        pass
-
-
 class Camera(Display):
 
     def __init__(self, index, width, height) -> None:
@@ -401,7 +413,6 @@ class Camera(Display):
     def get_np_image(self, scalar=1):
         image = self.get_surface_image(scalar=scalar)
         np_array = numpy.array(image, dtype=numpy.uint8)
-        # return cv2.cvtColor(np_array, cv2.COLOR_BGR2RGB)
         return numpy.array(image)
 
     def get_live_view(self, scalar=1):
@@ -479,8 +490,6 @@ class ChromecastMonitor(Display):
 
     @classmethod
     def get_all_devices(cls) -> [Self]:
-
-
         devices = []
         services, browser = pychromecast.discovery.discover_chromecasts()
         # Shut down discovery
@@ -525,6 +534,132 @@ class ChromecastMonitor(Display):
                 "manufacturer": self.manufacturer
             }
         }
+
+
+class ApplicationWindow(Display):
+
+    def __init__(self, window) -> None:
+
+        self.window = window
+        self.hwnd = window._hWnd
+
+        # I'm supplying dummy values to the Display init because they're going 
+        # to constantly update anyway, might want to change this behavior. We're 
+        # also gonna use hwnd as the cache key and I might want to extend this 
+        # to audio and video. TODO
+        super().__init__(index=self.hwnd, x=0, y=0, width=1, height=1)
+
+        self.graft_window_methods()
+
+    @property
+    def x(self):
+        return self.window.left
+    
+    @property
+    def y(self):
+        return self.window.top
+    
+    @property
+    def width(self):
+        return self.window.width
+    
+    @property
+    def height(self):
+        return self.window.height
+
+    def graft_window_methods(self):
+        """ 
+        This is here purely for my convenience during testing. I did want to inherit
+        the pygetwindow.Win32Window class, but not sure how that'll affect things. TODO
+        """
+        method_names = [
+            "activate", "area", "bottom", "bottomleft", "bottomright", "box", "center", 
+            "centerx", "centery", "close", "height", "hide", "isActive", "isMaximized", 
+            "isMinimized", "left", "maximize", "midbottom", "midleft", "midright", 
+            "midtop", "minimize", "move", "moveRel", "moveTo", "resize", "resizeRel", 
+            "resizeTo", "restore", "right", "show", "size", "title", "top", "topleft", 
+            "topright", "visible", "width"
+        ]
+        for method_name in method_names:
+            method = getattr(self.window, method_name)
+            setattr(self, f"window_{method_name}", method)
+
+    @classmethod
+    def get_all_devices(cls):
+        """
+        This is the first time I really need to consider the refreshing of devices at 
+        runtime. KIM that this discovery process may lead to get_all_devices changes.
+        
+        Here are some pygetwindow methods that can be used to speed up window retreival:
+            getActiveWindow
+            getActiveWindowTitle
+            getWindowsAt
+            getWindowsWithTitle
+            getAllWindows
+            getAllTitles
+        """
+        return [
+            cls.get_cache().get(window._hWnd, ApplicationScreen(window))
+            for window in pygetwindow.getAllWindows()
+            if 0 not in [window.width, window.height]
+        ]
+    
+    @property
+    def bbox_data(self):
+        """ A placeholder for a TODO.
+
+        Note:
+            I need to change this if I want to allow for removing displays or I can try 
+            to refresh the left and top values based on some thread that checks for it? 
+            Threading is going to be annoying.
+
+            Also unlike ScreenInfoMonitor, this is a property and not a cached_property.
+        """
+        return (self.x, self.y, self.x + self.width, self.y + self.height)
+
+    def get_surface_image(self, scalar):
+        # This does not account for obfuscation from  overlapping windows.
+        # image = ImageGrab.grab(bbox=self.bbox_data)
+        # return self.scale_surface_image(image, scalar=scalar)
+
+        # Get the window's dimensions
+        left, top, right, bot = win32gui.GetWindowRect(self.hwnd)
+        w = right - left
+        h = bot - top
+
+        # Create a device context
+        hwnd_dc = win32gui.GetWindowDC(self.hwnd)
+        mfc_dc = win32ui.CreateDCFromHandle(hwnd_dc)
+        save_dc = mfc_dc.CreateCompatibleDC()
+
+        # Create a bitmap and select it into the device context
+        save_bitmap = win32ui.CreateBitmap()
+        save_bitmap.CreateCompatibleBitmap(mfc_dc, w, h)
+        save_dc.SelectObject(save_bitmap)
+
+        # BitBlt the window image from the window's DC to our compatible DC
+        save_dc.BitBlt((0, 0), (w, h), mfc_dc, (0, 0), win32con.SRCCOPY)
+
+        # Convert the PyCBitmap to a PIL Image
+        bmp_info = save_bitmap.GetInfo()
+        bmp_str = save_bitmap.GetBitmapBits(True)
+        image = Image.frombuffer(
+            'RGB',
+            (bmp_info['bmWidth'], bmp_info['bmHeight']),
+            bmp_str, 'raw', 'BGRX', 0, 1
+        )
+
+        # Cleanup
+        win32gui.DeleteObject(save_bitmap.GetHandle())
+        save_dc.DeleteDC()
+        mfc_dc.DeleteDC()
+        win32gui.ReleaseDC(self.hwnd, hwnd_dc)
+
+        return image
+    
+    def get_np_image(self, scalar=1):
+        np_array = numpy.array(self.get_surface_image(scalar=scalar))
+        return cv2.cvtColor(np_array, cv2.COLOR_BGR2RGB)
 
 
 class Recorder:

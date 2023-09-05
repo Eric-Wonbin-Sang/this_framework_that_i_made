@@ -1,6 +1,6 @@
 import numpy
 from things.audio import AudioGraphVisualizer, Microphone, Speaker
-from things.video import (Camera, MssMonitor, ScreenInfoMonitor,
+from things.video import (ApplicationWindow, Camera, MssMonitor, ScreenInfoMonitor,
                           monitor_factory, ChromecastMonitor)
 
 
@@ -54,6 +54,14 @@ def test_monitors():
             # monitor.record(scalar=scalar)
 
 
+def test_applications():
+    
+    scalar = .4
+    for application in ApplicationWindow.get_all_devices():
+        print(application)
+        application.get_live_view(scalar=scalar)
+
+
 def test_cameras():
     
     for camera in Camera.get_all_devices():
@@ -67,8 +75,9 @@ def test_chromecasts():
 
 
 if __name__ == '__main__':
-    test_speakers()
-    test_mics()
-    test_monitors()
-    test_cameras()
-    test_chromecasts()
+    # test_speakers()
+    # test_mics()
+    # test_monitors()
+    test_applications()
+    # test_cameras()
+    # test_chromecasts()
