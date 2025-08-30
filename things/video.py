@@ -58,10 +58,12 @@ class SurfaceMixin(ABC):
         return self._height
 
     def get_scaled_width(self, scalar=1):
-        return int(self.width * scalar)
+        # Ensure scaled width is at least 1 pixel to avoid zero-size images
+        return max(1, int(self.width * scalar))
     
     def get_scaled_height(self, scalar=1):
-        return int(self.height * scalar)
+        # Ensure scaled height is at least 1 pixel to avoid zero-size images
+        return max(1, int(self.height * scalar))
 
     @abstractmethod
     def get_surface_image(self, scalar=1):
@@ -173,7 +175,9 @@ class Display(Device, SurfaceMixin, ABC):
     @staticmethod
     def scale_surface_image(image, scalar):
         width, height = image.size
-        scaled_width, scaled_height = int(width * scalar), int(height * scalar)
+        # Guard against zero or negative sizes when scaling down very small images
+        scaled_width = max(1, int(width * scalar))
+        scaled_height = max(1, int(height * scalar))
         return image.resize((scaled_width, scaled_height))
     
     def as_dict(self):
@@ -615,7 +619,8 @@ class ApplicationWindow(Display):
         return [
             cls.get_cache().get(window._hWnd, cls(window))
             for window in pygetwindow.getAllWindows()
-            if 0 not in [window.width, window.height]
+            # Skip tiny/invisible windows that report 0/1px sizes
+            if (window.width > 1 and window.height > 1)
         ]
     
     @property

@@ -60,24 +60,25 @@ application windows should be called a device.
 
 this is out of date:
 
-|           module            |          command          |
-| :-------------------------: | :-----------------------: |
-|            numpy            |     pip install numpy     |
-|        pyaudiowpatch        | pip install PyAudioWPatch |
-|         pygetwindow         |  pip install pygetwindow  |
-|          pyautogui          |   pip install PyAutoGUI   |
-|             cv2             | pip install opencv-python |
-|         screeninfo          |  pip install screeninfo   |
-|         matplotlib          |  pip install matplotlib   |
-|             mss             |  pip install ___________  |
-|        pychromecast         |  pip install ___________  |
-| win32gui, win32ui, win32con |    pip install pywin32    |
+| module                      | command                              |
+| --------------------------- | ------------------------------------ |
+| numpy                       | pip install numpy                    |
+| pyaudiowpatch               | pip install PyAudioWPatch            |
+| pygetwindow                 | pip install pygetwindow              |
+| pyautogui                   | pip install PyAutoGUI                |
+| cv2                         | pip install opencv-python            |
+| screeninfo                  | pip install screeninfo               |
+| matplotlib                  | pip install matplotlib               |
+| mss                         | pip install pip install mss          |
+| pychromecast                | pip install pip install PyChromecast |
+| win32gui, win32ui, win32con | pip install pywin32                  |
 
 
 ## Reference
 
 look into this:
  - pip install ndi-python
+ - https://github.com/skorokithakis/catt
 
 
 ## Note
