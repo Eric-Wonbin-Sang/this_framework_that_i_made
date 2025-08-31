@@ -1,0 +1,7 @@
+sounddevice>=0.4.6
+psutil>=5.9
+
+[dev]
+pytest
+mypy
+ruff

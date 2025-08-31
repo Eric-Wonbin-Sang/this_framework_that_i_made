@@ -3,7 +3,7 @@ from functools import cached_property, lru_cache
 from typing import List
 import sounddevice
 
-from structure.generics import SavableObject, ensure_savable, group_by
+from .generics import SavableObject, ensure_savable, group_by
 
 
 sounddevice.default.samplerate = 48000

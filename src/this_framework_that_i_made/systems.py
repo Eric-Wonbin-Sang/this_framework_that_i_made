@@ -4,8 +4,8 @@ import platform
 import psutil
 import socket
 
-from structure.audio import AudioSystem, AudioDevice
-from structure.generics import SavableObject, ensure_savable, staticproperty
+from .audio import AudioSystem, AudioDevice
+from .generics import SavableObject, ensure_savable, staticproperty
 
 
 class Directory:
@@ -16,12 +16,6 @@ class Directory:
 class File:
 
     ...
-
-
-@ensure_savable
-@dataclass(slots=True)
-class RuntimeEnv(SavableObject):
-    python_version: str = platform.python_build()
 
 
 @ensure_savable
@@ -106,7 +100,7 @@ class WindowsSystem(OperatingSystem):
         """Return AudioDevice objects approximating Windows Sound UI.
         Keeps a device if ANY of its endpoints would appear in the Sound menu.
         """
-        preferred_hostapi = "Windows WASAPI"
+        preferred_hostapi = "Windows WASAPI"  # TODO: make this an enum
         excluded_prefixes = ("Microsoft Sound Mapper", "Primary Sound")
 
         def is_loopback(name: str) -> bool:
