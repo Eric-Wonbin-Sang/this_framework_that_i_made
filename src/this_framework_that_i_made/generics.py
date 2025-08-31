@@ -3,6 +3,10 @@ from dataclasses import fields, is_dataclass
 from typing import Any
 
 
+class TftimException(Exception):
+    """ To explicitly tell devs that an exception is expected within this context. """
+
+
 class staticproperty(property):
     def __get__(self, obj, objtype=None):
         return self.fget()
