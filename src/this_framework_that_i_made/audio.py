@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum
 from functools import cached_property, lru_cache
 from typing import List
 import sounddevice
@@ -7,6 +8,11 @@ from .generics import SavableObject, TftimException, ensure_savable, group_by, s
 
 
 sounddevice.default.samplerate = 48000
+
+
+class AudioEndpointType(Enum):  # I might want to change this to AudioType TODO
+    INPUT = "input"
+    OUTPUT = "output"
 
 
 @ensure_savable
@@ -27,18 +33,39 @@ class AudioEndpoint(SavableObject):
     index: str                        # Device index (used when opening streams)
     hostapi: str                      # Which host API (WASAPI, DirectSound, ASIO, etc.)
     hostapi_name: str                 # need to get the hostapi name via sounddevice.query_hostapis()
-    max_input_channels: str           # How many input channels (mic, line-in, etc.)
-    max_output_channels: str          # How many output channels (0 means input-only device)
+    max_input_channels: int           # How many input channels (mic, line-in, etc.)
+    max_output_channels: int          # How many output channels (0 means input-only device)
     default_low_input_latency: str    # Suggested low-latency buffer (seconds)
     default_low_output_latency: str  
     default_high_input_latency: str   # Suggested high-latency buffer (seconds)
     default_high_output_latency: str
     default_samplerate: str           # Default sample rate (Hz)
+    endpoint_type: AudioEndpointType = None
+
+    def _get_endpoint_type(self):
+        if self.max_input_channels > 0:
+            return AudioEndpointType.INPUT
+        elif self.max_output_channels > 0:
+            return AudioEndpointType.OUTPUT
+        raise TftimException("{self.max_input_channels=} and {self.max_output_channels=} don't make sense")
+
+    def __post_init__(self):
+        self.endpoint_type = self._get_endpoint_type()
 
 
 @ensure_savable
 @dataclass
 class AudioDevice(SavableObject):
+
+    """
+    
+    What's the difference between an input vs an output? Conceptually, we have some stream of data that
+    a program reads. Regardless of where that data is coming from, the audio data should inherently be 
+    the same. All I care about is what exists and how I can route it. This should allow for the creation
+    of virtual audio devices that take in true endpoints, process them in whatever way, and then return
+    a virtual device that combines the two.
+    
+    """
 
     endpoints: List[AudioEndpoint]
 
@@ -51,18 +78,6 @@ class AudioDevice(SavableObject):
         hostapi_to_endpoint = group_by(self.endpoints, lambda e: e.hostapi_name)
         hostapis = list(hostapi_to_endpoint.keys())
         return f"{self.__class__.__name__}({name=}, {hostapis=})"
-
-
-@ensure_savable
-@dataclass(slots=True)
-class AudioInputDevice(AudioDevice):
-    ...
-
-
-@ensure_savable
-@dataclass(slots=True)
-class AudioOutputDevice(AudioDevice):
-    ...
 
 
 @ensure_savable
