@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from dataclasses import dataclass, fields, is_dataclass
-from typing import Any
+from functools import cached_property, lru_cache
+from typing import Any, List
 import sounddevice
 import platform
 import psutil
@@ -10,10 +12,18 @@ import socket
 sounddevice.default.samplerate = 48000
 
 
-# move this somewhere else
+# TODO: move this somewhere else
 class staticproperty(property):
     def __get__(self, obj, objtype=None):
         return self.fget()
+
+
+# TODO: move this somewhere else
+def group_by_name(objects):
+    groups = defaultdict(list)
+    for obj in objects:
+        groups[obj.name].append(obj)
+    return groups
 
 
 class Directory:
@@ -26,11 +36,18 @@ class File:
     ...
 
 
+def _is_self_dataclass_class(cls) -> bool:
+    """True if `cls` is decorated with @dataclass itself (not just inheriting)."""
+    return (
+        is_dataclass(cls)
+        and ("__dataclass_fields__" in cls.__dict__ or "__dataclass_params__" in cls.__dict__)
+    )
+
+
 def ensure_savable(cls):
-    if not (is_dataclass(cls) or hasattr(cls, "as_dict")):
+    """Validate that a class is a dataclass (itself) or defines as_dict()."""
+    if not (_is_self_dataclass_class(cls) or hasattr(cls, "as_dict")):
         raise TypeError(f"{cls.__name__} must be a dataclass or define as_dict()")
-    # if not is_dataclass(cls) and not hasattr(cls, "from_dict"):
-    #     raise TypeError(f"{cls.__name__} must define from_dict() when not a dataclass")
     return cls
 
 
@@ -38,7 +55,8 @@ class SavableObject:
 
     def _pretty(self, obj: Any, indent: int = 0) -> str:
         pad = " " * indent
-        if is_dataclass(obj):
+        # Only treat as dataclass if the object's class is itself a dataclass
+        if is_dataclass(obj) and _is_self_dataclass_class(type(obj)):
             # Pretty print nested dataclasses too
             cls = obj.__class__.__name__
             inner = []
@@ -138,36 +156,128 @@ class CpuInfo(SavableObject):
 
 
 @ensure_savable
+@dataclass(slots=True)
+class AudioEndpoint(SavableObject):
+
+    """
+    Each physical interface (like your Audient EVO8) exposes multiple endpoints to Windows/PortAudio:
+    - Different input jacks (mic, line-in, loopback, etc.)
+    - Different output jacks (headphones, speakers, loopback)
+    - Sometimes Windows duplicates them as WDM/DirectSound/WASAPI devices.
+    
+    PortAudio doesn't collapse them — it lists each separately so you can choose exactly what stream you want.
+    
+    """
+
+    name: str                          
+    index: str                        # Device index (used when opening streams)
+    hostapi: str                      # Which host API (WASAPI, DirectSound, ASIO, etc.)
+    hostapi_name: str                 # need to get the hostapi name via sounddevice.query_hostapis()
+    max_input_channels: str           # How many input channels (mic, line-in, etc.)
+    max_output_channels: str          # How many output channels (0 means input-only device)
+    default_low_input_latency: str    # Suggested low-latency buffer (seconds)
+    default_low_output_latency: str  
+    default_high_input_latency: str   # Suggested high-latency buffer (seconds)
+    default_high_output_latency: str
+    default_samplerate: str           # Default sample rate (Hz)
+
+
+@ensure_savable
+@dataclass
+class AudioDevice(SavableObject):
+    endpoints: List[AudioEndpoint]
+
+
+@ensure_savable
+@dataclass(slots=True)
+class AudioInputDevice(AudioDevice):
+    ...
+
+
+@ensure_savable
+@dataclass(slots=True)
+class AudioOutputDevice(AudioDevice):
+    ...
+
+
+@ensure_savable
+class AudioSystem(AudioDevice):
+
+    """
+    In PortAudio (which sounddevice wraps), a host API is the underlying audio backend that PortAudio uses to talk to the system.
+
+    Each operating system exposes different backends, so the list depends on your platform.
+
+    Common host APIs by OS
+    - Windows
+        - MME (old, high-latency, but always available)
+        - DirectSound
+        - WASAPI (modern Windows audio, low latency, supports loopback)
+        - ASIO (pro audio, needs special driver, lowest latency)
+    - macOS
+        - Core Audio (the only real one, very good quality/latency)
+    - Linux
+        - ALSA (standard)
+        - JACK (pro audio, low latency, routing between apps)
+        - OSS (legacy)
+
+    Cross-platform perspective
+        - sounddevice/PortAudio makes the API consistent, but the host APIs you see differ per OS.
+        - Example: "WASAPI" only exists on Windows; "Core Audio" only exists on macOS.
+        - Some names may be present but not functional (e.g. JACK if not installed).
+    
+    """
+
+    ALL_HOST_APIS = sounddevice.query_hostapis()
+
+    @classmethod
+    @lru_cache(maxsize=1)
+    def available_hostapis(cls):
+        return tuple(t['name'] for t in cls.ALL_HOST_APIS)
+
+    def __init__(self):
+        self.audio_devices: List[AudioDevice] = self._get_audio_devices()
+    
+    @classmethod
+    def _get_audio_endpoints(cls):
+        return [
+            AudioEndpoint(
+                hostapi_name=cls.available_hostapis()[data["hostapi"]],
+                **data,
+            )
+            for data in sounddevice.query_devices()
+        ]
+
+    @classmethod
+    def _get_audio_devices(cls):
+        return [
+            AudioDevice(endpoints=endpoints)
+            for endpoints in group_by_name(cls._get_audio_endpoints()).values()
+        ]
+
+    def as_dict(self):
+        return {
+            "audio_devices": self.audio_devices,
+        }
+
+
+@ensure_savable
 class OperatingSystem(ABC, SavableObject):
 
     def __init__(self):
-        self.system_info = SystemInfo()
-        self.cpu_info = CpuInfo()
-        self.audio_devices = self._get_audio_devices()
+        self.system_info: SystemInfo = SystemInfo()
+        self.cpu_info: CpuInfo = CpuInfo()
+        self.audio_system: AudioSystem = AudioSystem()
 
     @classmethod
     def read(cls):
         ...
 
-    @staticmethod
-    def _get_hostname():
-        ...
-
-    @staticmethod
-    def _get_audio_devices():
-        return sounddevice.query_devices()
-
-    def get_audio_device(self, target_str):
-        for device in self.audio_devices:
-            if target_str.lower() in device['name'].lower():
-                return device
-        raise RuntimeError(f"No device contains: {target_str}")
-
     def as_dict(self):
         return {
             "system_info": self.system_info,
             "cpu_info": self.cpu_info,
-            "audio_devices": self.audio_devices,
+            "audio_system": self.audio_system,
         }
 
 
