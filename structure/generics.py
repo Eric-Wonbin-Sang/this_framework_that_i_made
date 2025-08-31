@@ -8,10 +8,10 @@ class staticproperty(property):
         return self.fget()
 
 
-def group_by_name(objects):
+def group_by(objects, key_func):
     groups = defaultdict(list)
     for obj in objects:
-        groups[obj.name].append(obj)
+        groups[key_func(obj)].append(obj)
     return groups
 
 
@@ -34,6 +34,16 @@ class SavableObject:
 
     def _pretty(self, obj: Any, indent: int = 0) -> str:
         pad = " " * indent
+        # If a subclass explicitly overrides __str__, respect it
+        if isinstance(obj, SavableObject):
+            cls = type(obj)
+            custom_str = cls.__dict__.get("__str__")
+            if custom_str is not None and custom_str is not SavableObject.__str__:
+                s = obj.__str__()
+                if "\n" in s and indent:
+                    # Indent subsequent lines to align within pretty blocks
+                    return ("\n" + (" " * indent)).join(s.splitlines())
+                return s
         # Only treat as dataclass if the object's class is itself a dataclass
         if is_dataclass(obj) and _is_self_dataclass_class(type(obj)):
             # Pretty print nested dataclasses too
@@ -69,4 +79,8 @@ class SavableObject:
 
     def __str__(self) -> str:
         # Assumes self is a dataclass
+        return self._pretty(self, 0)
+
+    def pretty(self) -> str:
+        """Expose pretty output to subclasses that want to opt in from __str__."""
         return self._pretty(self, 0)

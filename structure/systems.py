@@ -4,7 +4,7 @@ import platform
 import psutil
 import socket
 
-from structure.audio import AudioSystem
+from structure.audio import AudioSystem, AudioDevice
 from structure.generics import SavableObject, ensure_savable, staticproperty
 
 
@@ -101,7 +101,33 @@ class OperatingSystem(ABC, SavableObject):
 
 
 class WindowsSystem(OperatingSystem):
-    ...
+    
+    def get_windows_audio_devices(self, include_loopback: bool = False) -> list[AudioDevice]:
+        """Return AudioDevice objects approximating Windows Sound UI.
+        Keeps a device if ANY of its endpoints would appear in the Sound menu.
+        """
+        preferred_hostapi = "Windows WASAPI"
+        excluded_prefixes = ("Microsoft Sound Mapper", "Primary Sound")
+
+        def is_loopback(name: str) -> bool:
+            s = name.lower()
+            return ("loop-back" in s) or ("loopback" in s)
+
+        def endpoint_visible(ep) -> bool:
+            if ep.hostapi_name != preferred_hostapi:
+                return False
+            if any(ep.name.startswith(p) for p in excluded_prefixes):
+                return False
+            if not include_loopback and is_loopback(ep.name):
+                return False
+            if not (ep.max_input_channels or ep.max_output_channels):
+                return False
+            return True
+
+        return [
+            dev for dev in self.audio_system.audio_devices
+            if any(endpoint_visible(ep) for ep in dev.endpoints)
+        ]
 
 
 class UnixSystem(OperatingSystem):

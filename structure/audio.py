@@ -1,9 +1,9 @@
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cached_property, lru_cache
 from typing import List
 import sounddevice
 
-from structure.generics import SavableObject, ensure_savable, group_by_name
+from structure.generics import SavableObject, ensure_savable, group_by
 
 
 sounddevice.default.samplerate = 48000
@@ -39,7 +39,18 @@ class AudioEndpoint(SavableObject):
 @ensure_savable
 @dataclass
 class AudioDevice(SavableObject):
+
     endpoints: List[AudioEndpoint]
+
+    @cached_property
+    def name(self):
+        return self.endpoints[0].name
+
+    def __str__(self):
+        name = self.name
+        hostapi_to_endpoint = group_by(self.endpoints, lambda e: e.hostapi_name)
+        hostapis = list(hostapi_to_endpoint.keys())
+        return f"{self.__class__.__name__}({name=}, {hostapis=})"
 
 
 @ensure_savable
@@ -55,7 +66,7 @@ class AudioOutputDevice(AudioDevice):
 
 
 @ensure_savable
-class AudioSystem(AudioDevice):
+class AudioSystem(SavableObject):
 
     """
     In PortAudio (which sounddevice wraps), a host API is the underlying audio backend that PortAudio uses to talk to the system.
@@ -106,7 +117,7 @@ class AudioSystem(AudioDevice):
     def _get_audio_devices(cls):
         return [
             AudioDevice(endpoints=endpoints)
-            for endpoints in group_by_name(cls._get_audio_endpoints()).values()
+            for endpoints in group_by(cls._get_audio_endpoints(), lambda e: e.name).values()
         ]
 
     def as_dict(self):
