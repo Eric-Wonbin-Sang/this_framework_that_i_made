@@ -173,7 +173,7 @@ class LoopbackSpeaker(AudioDevice):
 
     @classmethod
     def get_all_devices(cls):
-        return [cls(d) for d in cls.py_audio.get_loopback_device_info_generator()]
+        return [cls(**d) for d in cls.py_audio.get_loopback_device_info_generator()]
 
 
 

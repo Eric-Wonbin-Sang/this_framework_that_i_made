@@ -50,6 +50,12 @@ This project heavily utilizes OOP and follows something like this:
         - AudioTransmitter
         - AudioNdiTransmitter
 
+
+NEW STRUCTURE
+
+
+
+
 This structure is obviously very complicated, but the idea is that everything has some 
 output which can be formed in some standard way to reuse things that inherently require 
 the same data to view, send, etc. 

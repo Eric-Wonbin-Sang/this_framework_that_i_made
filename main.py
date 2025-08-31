@@ -75,9 +75,9 @@ def test_chromecasts():
 
 
 if __name__ == '__main__':
-    # test_speakers()
+    test_speakers()
     # test_mics()
     # test_monitors()
-    test_applications()
+    # test_applications()
     # test_cameras()
     # test_chromecasts()
