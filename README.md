@@ -1,3 +1,6 @@
+# this whole thing is out of date, fix!
+
+
 # computer_recorder
 
 A project for capturing anything on your computer.
