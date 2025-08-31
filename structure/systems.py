@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, is_dataclass
+from typing import Any
 import sounddevice
 import platform
 import psutil
@@ -25,13 +26,64 @@ class File:
     ...
 
 
+def ensure_savable(cls):
+    if not (is_dataclass(cls) or hasattr(cls, "as_dict")):
+        raise TypeError(f"{cls.__name__} must be a dataclass or define as_dict()")
+    # if not is_dataclass(cls) and not hasattr(cls, "from_dict"):
+    #     raise TypeError(f"{cls.__name__} must define from_dict() when not a dataclass")
+    return cls
+
+
+class SavableObject:
+
+    def _pretty(self, obj: Any, indent: int = 0) -> str:
+        pad = " " * indent
+        if is_dataclass(obj):
+            # Pretty print nested dataclasses too
+            cls = obj.__class__.__name__
+            inner = []
+            for f in fields(obj):
+                v = getattr(obj, f.name)
+                inner.append(f"{pad}  {f.name} = {self._pretty(v, indent + 2)}")
+            return f"{cls}(\n" + ",\n".join(inner) + f"\n{pad})"
+        elif isinstance(obj, (list, tuple, set)):
+            open_, close_ = ("[", "]") if isinstance(obj, list) else ("(", ")") if isinstance(obj, tuple) else ("{", "}")
+            if not obj:
+                return f"{open_}{close_}"
+            items = [self._pretty(v, indent + 2) for v in obj]
+            inner = ",\n".join((" " * (indent + 2)) + s for s in items)
+            return f"{open_}\n{inner}\n{pad}{close_}"
+        elif isinstance(obj, dict):
+            if not obj:
+                return "{}"
+            inner = []
+            for k, v in obj.items():
+                inner.append(f"{pad}  {k!r}: {self._pretty(v, indent + 2)}")
+            return "{\n" + ",\n".join(inner) + f"\n{pad}}}"
+        elif isinstance(obj, SavableObject) and hasattr(obj, 'as_dict') and callable(getattr(obj, 'as_dict', None)):
+            d = obj.as_dict()
+            inner = []
+            for k, v in d.items():
+                inner.append(f"{pad}  {k} = {self._pretty(v, indent + 2)}")
+            return f"{obj.__class__.__name__}(\n" + ",\n".join(inner) + f"\n{pad})"
+        else:
+            # Fallback scalar formatting
+            return repr(obj)
+
+    def __str__(self) -> str:
+        # Assumes self is a dataclass
+        return self._pretty(self, 0)
+
+
+@ensure_savable
 @dataclass(slots=True)
-class RuntimeEnv:
+class RuntimeEnv(SavableObject):
     python_version: str = platform.python_build()
 
 
+@ensure_savable
 @dataclass(slots=True)
-class SystemInfo:
+class SystemInfo(SavableObject):
     system: str = platform.system()        # 'Windows', 'Linux', 'Darwin'
     release: str = platform.release()      # e.g., '10', '5.15.0-78-generic'
     version: str = platform.version()
@@ -40,8 +92,9 @@ class SystemInfo:
     hostname: str = socket.gethostname()
 
 
+@ensure_savable
 @dataclass(slots=True)
-class CoreInfo:
+class CoreInfo(SavableObject):
 
     index: str
     min_frequency: int
@@ -57,8 +110,9 @@ class CoreInfo:
         return f"Core {self.index}: (min {self.min_frequency}, max {self.max_frequency})"
 
 
+@ensure_savable
 @dataclass(slots=True)
-class CpuInfo:
+class CpuInfo(SavableObject):
 
     """ This gives overall CPU usage (beware machines with multiple CPUs) """
 
@@ -83,7 +137,8 @@ class CpuInfo:
         return psutil.cpu_percent()
 
 
-class OperatingSystem(ABC):
+@ensure_savable
+class OperatingSystem(ABC, SavableObject):
 
     def __init__(self):
         self.system_info = SystemInfo()
@@ -107,6 +162,13 @@ class OperatingSystem(ABC):
             if target_str.lower() in device['name'].lower():
                 return device
         raise RuntimeError(f"No device contains: {target_str}")
+
+    def as_dict(self):
+        return {
+            "system_info": self.system_info,
+            "cpu_info": self.cpu_info,
+            "audio_devices": self.audio_devices,
+        }
 
 
 class WindowsSystem(OperatingSystem):
