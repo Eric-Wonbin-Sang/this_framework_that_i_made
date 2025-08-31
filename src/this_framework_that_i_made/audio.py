@@ -134,7 +134,7 @@ class AudioSystem(SavableObject):
 
     @property
     def audio_endpoints(self):
-        # remember data["hostapi"] is the idex of the hostapi, stupid
+        # remember data["hostapi"] is the index of the hostapi, stupid
         return [
             AudioEndpoint(hostapi_name=self.host_apis[data["hostapi"]].name, **data)
             for data in sounddevice.query_devices()
