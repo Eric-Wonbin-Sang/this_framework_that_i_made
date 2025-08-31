@@ -146,13 +146,6 @@ class AudioSystem(SavableObject):
             AudioDevice(endpoints=endpoints)
             for endpoints in group_by(self.audio_endpoints, lambda e: e.name).values()
         ]
-
-    @property
-    def default_endpoints(self):
-        return list(filter(
-            lambda endpoint: endpoint.index in self.name_to_host_api[endpoint.hostapi_name],
-            self.audio_endpoints
-        ))
     
     @property
     def default_input_endpoints(self):

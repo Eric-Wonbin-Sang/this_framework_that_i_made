@@ -11,8 +11,8 @@ def main():
     system = WindowsSystem()
     # print(system)
     # print("\n".join(map(str, system.get_windows_audio_devices())))
-    # print("\n".join(map(str, system.audio_system.default_endpoints)))
 
+    print("audio tests", "-" * 100)
     print("\n".join(map(str, system.audio_system.default_input_endpoints)))
     print("-" * 100)
     print("\n".join(map(str, system.audio_system.default_output_endpoints)))
