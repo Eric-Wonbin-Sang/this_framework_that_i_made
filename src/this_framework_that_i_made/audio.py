@@ -1,13 +1,29 @@
 from dataclasses import dataclass
 from enum import Enum
-from functools import cached_property, lru_cache
-from typing import List
+from functools import cached_property
+import logging
+from typing import Iterator, List, Optional, Tuple, Union
+import numpy as np
+import soundcard
 import sounddevice
 
 from .generics import SavableObject, TftimException, ensure_savable, group_by, staticproperty
 
 
+logger = logging.getLogger(__name__)
+
+
 sounddevice.default.samplerate = 48000
+
+
+SoundcardDevice = Union[
+    "soundcard.coreaudio._Microphone",
+    "soundcard.pulseaudio._Microphone",
+    "soundcard.mediafoundation._Speaker",
+    "soundcard.coreaudio._Speaker",
+    "soundcard.pulseaudio._Speaker",
+]
+
 
 
 class AudioEndpointType(Enum):  # I might want to change this to AudioType TODO
@@ -52,12 +68,151 @@ class AudioEndpoint(SavableObject):
     def __post_init__(self):
         self.endpoint_type = self._get_endpoint_type()
 
+    @property
+    def channels(self):
+        """ since a device is only an output or an input (at least I think), we can abstract channels """
+        return self.max_input_channels if self.endpoint_type == AudioEndpointType.INPUT else self.max_output_channels
+
+    @property
+    def opposite_channels(self):
+        return self.max_input_channels if self.endpoint_type == AudioEndpointType.OUTPUT else self.max_output_channels
+
+
+class SoundCardManager:
+
+    """
+
+    This soundcard module seems great, although the inheritance structure is conceptually really different.
+
+    I just care about having some way to get the pcm blocks, so simplifies a lot of stuff for me.
+
+    """
+
+    @staticmethod
+    def get_soundcard_mics():
+        return soundcard.all_microphones(include_loopback=True)
+    
+    @staticmethod
+    def get_soundcard_speakers():
+        return soundcard.all_speakers()
+    
+    @classmethod
+    def get_source_by_name(cls, name: str, endpoint_type: AudioEndpointType):
+        try:
+            if endpoint_type == AudioEndpointType.INPUT:
+                return soundcard.get_microphone(name)
+            elif endpoint_type == AudioEndpointType.OUTPUT:
+                # a loopback is required to listen to an output since outputs don't have this feature by default
+                for mic in cls.get_soundcard_mics():
+                    target_name = name.strip().lower()
+                    mic_name = mic.name.lower()
+                    if target_name in mic_name and ("loopback" in mic_name or "monitor" in mic_name):
+                        return mic
+            raise TftimException(f"{endpoint_type=} for search {name=} is not correct")
+        except Exception as e:
+            logger.warning(f"could not find {name=} with {endpoint_type=}: {e}")
+            return None
+
+
+class PcmEncoding(Enum):
+
+    """
+    
+    Pulse-Code Modulation encodings
+    
+    Float32 (“f32”)
+        Each sample is a 32-bit float, usually in range -1.0 to +1.0.
+        This is what most Python audio libs (NumPy, sounddevice, soundcard) give you by default.
+        Easy to do math/processing on.
+
+    Int16 (“i16”)
+        Each sample is a 16-bit signed integer, in range -2768…32767.
+        Common in WAV files, sound cards, and network/audio protocols.
+        Smaller bandwidth than float32 (2 bytes vs 4 bytes per sample).
+    
+    """
+
+    # common formats
+    FLOAT_32 = "f32"
+    INT_16 = "i16"
+
+    # less used
+    INT_8 = "i8"
+    INT_24 = "i24"
+    INT_32 = "i32"
+    FLOAT_64 = "f64"
+
+
+@dataclass
+class AudioDeviceStreamer:
+
+    audio_device: SoundcardDevice            # or your wrapper type
+    sample_rate: Optional[int] = None
+    channels: Optional[int] = None
+    encoding: PcmEncoding = PcmEncoding.FLOAT_32  # "f32" or "i16"
+    block_ms: int = 20
+    as_bytes: bool = False
+
+    def __post_init__(self):
+        # Resolve defaults from device if not provided
+        # (soundcard microphones don't expose default SR/channels reliably; pick sensible defaults)
+        self.sample_rate = int(self.sample_rate or 48_000)
+        self.channels = int(self.channels or 2)
+        self.block_size = max(1, int(round(self.sample_rate * (self.block_ms / 1000.0))))
+        self._recorder = None
+    
+    @cached_property
+    def pcm_block_metadata(self) -> dict:
+        """Metadata that you can access when in the recording context."""
+        return {
+            "sample_rate": self.sample_rate,
+            "channels": self.channels,
+            "format": self.encoding,
+            "name": self.audio_device.name,
+            "block_size": self.block_size,
+        }
+    
+    def __enter__(self):
+        if self.audio_device.soundcard_device is None:
+            raise TftimException(f"audio_device {self.audio_device.name} has no soundcard_device")
+        self._recorder = self.audio_device.soundcard_device.recorder(
+            samplerate=self.sample_rate,
+            channels=self.channels,
+            blocksize=self.block_size,
+        )
+        self._rec_ctx = self._recorder.__enter__()   # enter context
+        return self
+
+    def stream(self) -> Iterator[Tuple[dict, np.ndarray | bytes]]:
+        """
+        Continuous generator of pcm_blocks until the caller stops iterating.
+        Call this inside the 'with' block so the device is open.
+        """
+        if self._recorder is None:
+            raise RuntimeError("Call stream() inside 'with AudioDeviceStreamer(...) as s:'")
+
+        while True:
+            block = self._rec_ctx.record(numframes=self.block_size)  # float32, shape (frames, ch)
+            if self.encoding == "i16":
+                block = (np.clip(block, -1.0, 1.0) * 32767.0).astype(np.int16)
+            yield block.tobytes() if self.as_bytes else block
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            if hasattr(self, "_recorder") and self._recorder is not None:
+                return self.recorder.__exit__(exc_type, exc_value, traceback)
+        finally:
+            self._recorder = None
+        return None
+
 
 @ensure_savable
 @dataclass
 class AudioDevice(SavableObject):
 
     """
+
+    A set of audio endpoints grouped by name, representing all different hostapi routes for a specific device.
     
     What's the difference between an input vs an output? Conceptually, we have some stream of data that
     a program reads. Regardless of where that data is coming from, the audio data should inherently be 
@@ -69,9 +224,17 @@ class AudioDevice(SavableObject):
 
     endpoints: List[AudioEndpoint]
 
-    @cached_property
+    @property
     def name(self):
         return self.endpoints[0].name
+
+    @property
+    def endpoint_type(self):
+        return self.endpoints[0].endpoint_type
+
+    @property
+    def soundcard_device(self):
+        return SoundCardManager.get_source_by_name(self.name, self.endpoint_type)
 
     def __str__(self):
         name = self.name
@@ -83,6 +246,7 @@ class AudioDevice(SavableObject):
 @ensure_savable
 @dataclass(slots=True)
 class HostApi(SavableObject):
+
     name: str
     devices: List[str]
     default_input_device: int
@@ -97,6 +261,7 @@ class HostApi(SavableObject):
 
 
 @ensure_savable
+@dataclass(slots=True)
 class AudioSystem(SavableObject):
 
     """
@@ -162,20 +327,36 @@ class AudioSystem(SavableObject):
             for endpoints in group_by(self.audio_endpoints, lambda e: e.name).values()
         ]
     
+    def is_endpoint_default_input(self, endpoint):
+        return endpoint.index == self.name_to_host_api[endpoint.hostapi_name].default_input_device
+
     @property
     def default_input_endpoints(self):
-        return list(filter(
-            lambda endpoint: endpoint.index == self.name_to_host_api[endpoint.hostapi_name].default_input_device,
-            self.audio_endpoints
-        ))
+        return list(filter(self.is_endpoint_default_input, self.audio_endpoints))
     
     @property
-    def default_output_endpoints(self):
+    def default_input_devices(self):
         return list(filter(
-            lambda endpoint: endpoint.index == self.name_to_host_api[endpoint.hostapi_name].default_output_device,
-            self.audio_endpoints
+            lambda device: device.endpoint_type == AudioEndpointType.INPUT \
+                and any(self.is_endpoint_default_input(e) for e in device.endpoints),
+            self.audio_devices
         ))
     
+    def is_endpoint_default_output(self, endpoint):
+        return endpoint.index == self.name_to_host_api[endpoint.hostapi_name].default_output_device
+
+    @property
+    def default_output_endpoints(self):
+        return list(filter(self.is_endpoint_default_output, self.audio_endpoints))
+    
+    @property
+    def default_output_devices(self):
+        return list(filter(
+            lambda device: device.endpoint_type == AudioEndpointType.OUTPUT \
+                and any(self.is_endpoint_default_output(e) for e in device.endpoints),
+            self.audio_devices
+        ))
+
     def as_dict(self):
         return {
             "audio_devices": self.audio_devices,
