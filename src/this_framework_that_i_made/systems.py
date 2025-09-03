@@ -74,6 +74,19 @@ class CpuInfo(SavableObject):
         return psutil.cpu_percent()
 
 
+# sessions = AudioUtilities.GetAllSessions()
+# for session in sessions:
+#     print(session.Process and session.Process.name(), session)
+
+
+@ensure_savable
+@dataclass(slots=True)
+class Process:
+    ...
+
+
+
+
 @ensure_savable
 class OperatingSystem(ABC, SavableObject):
 

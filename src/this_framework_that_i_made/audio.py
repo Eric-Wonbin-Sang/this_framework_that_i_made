@@ -233,6 +233,14 @@ class AudioDevice(SavableObject):
         return self.endpoints[0].endpoint_type
 
     @property
+    def default_sample_rate(self):
+        return self.endpoints[0].default_samplerate
+
+    @property
+    def channels(self):
+        return self.endpoints[0].channels
+
+    @property
     def soundcard_device(self):
         return SoundCardManager.get_source_by_name(self.name, self.endpoint_type)
 
