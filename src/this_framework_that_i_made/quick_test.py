@@ -1,4 +1,5 @@
 import warnings
+from this_framework_that_i_made.audio_helpers.volume_helpers import WindowVolumeControllerFactory
 from this_framework_that_i_made.python import PythonRuntimeEnv
 from this_framework_that_i_made.systems import WindowsSystem
 
@@ -8,6 +9,7 @@ def test_audio_devices_and_endpoint():
 
     # testing = "input"
     testing = "output"
+    # testing = "processes"
 
     device = system.audio_system.audio_devices[21]
     if testing == "input":
@@ -18,6 +20,10 @@ def test_audio_devices_and_endpoint():
     if testing == "output":
         audio_endpoint = device.audio_endpoints[2]
         controller = audio_endpoint.volume_controller
+        print(controller)
+    if testing == "processes":
+        controllers = WindowVolumeControllerFactory.get_process_volume_controllers()
+        controller = WindowVolumeControllerFactory.get_process_volume_controller_by_name("zen")
         print(controller)
 
 

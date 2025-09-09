@@ -1,7 +1,13 @@
 
 from abc import ABC, abstractmethod
 
-from this_framework_that_i_made.generics import TftimException
+# TODO: will conflict when running on non-windows. need to handle. Can separate this module to import conditionally.
+from pycaw.pycaw import AudioUtilities
+from pycaw.pycaw import IAudioEndpointVolume
+from ctypes import cast, POINTER
+from comtypes import CLSCTX_ALL
+
+from this_framework_that_i_made.generics import SavableObject, TftimException, ensure_savable
 
 
 class VolumeController(ABC):
@@ -24,19 +30,32 @@ class VolumeController(ABC):
     def get_volume(self):
         ...
 
+    def get_percent(self):
+        range_values = self.get_range()
+        return (self.get_volume() - range_values["min"]) / (range_values["max"] - range_values["min"])
+
     @abstractmethod
-    def set_volume(self):
+    def set_volume(self, value):
         ...
+
+    def set_max_volume(self):
+        self.set_volume(self.get_range()["max"])
 
     def increment_volume(self):
         range_values = self.get_range()
-        if (value := self.get_volume() + range_values["step"]) <= range_values["max"]:
+        curr_volume = self.get_volume()
+        if (value := curr_volume + range_values["step"]) <= range_values["max"]:
             self.set_volume(value)
+            return value
+        return curr_volume
 
     def decrement_volume(self):
         range_values = self.get_range()
-        if (value := self.get_volume() - range_values["step"]) >= range_values["min"]:
+        curr_volume = self.get_volume()
+        if (value := curr_volume - range_values["step"]) >= range_values["min"]:
             self.set_volume(value)
+            return value
+        return curr_volume
 
     @abstractmethod
     def is_muted(self):
@@ -51,11 +70,81 @@ class VolumeController(ABC):
         ...
 
 
+@ensure_savable
+class ProcessVolumeController(VolumeController, SavableObject):
+
+    def __init__(self, audio_session):
+        self.audio_session = audio_session
+        self.process_id = self.audio_session.ProcessId
+        self.process = self.audio_session.Process
+        self.process_name = self.process.name() if self.process else None
+
+    def get_range(self):
+        return {"min": 0, "max": 1, "step": 0.01}
+    
+    def get_volume(self):
+        # TODO: not sure why this has so much accuracy, causes issues with SetMasterVolume
+        return round(self.audio_session.SimpleAudioVolume.GetMasterVolume(), 3)
+
+    def set_volume(self, value):
+        self.audio_session.SimpleAudioVolume.SetMasterVolume(value, None)
+
+    def is_muted(self):
+        return self.audio_session.SimpleAudioVolume.GetMute() == 1
+
+    def mute(self):
+        self.audio_session.SimpleAudioVolume.SetMute(1, None)
+
+    def unmute(self):
+        self.audio_session.SimpleAudioVolume.SetMute(0, None)
+
+    def as_dict(self):
+        return {
+            "process_id": self.process_id,
+            "process_name": self.process_name,
+        }
+
+    def __repr__(self):
+        process_name = self.process_name
+        return f"{self.__class__.__name__}({process_name=})"
+
+
+@ensure_savable
+class DeviceVolumeController(VolumeController, SavableObject):
+    
+    def __init__(self, device, volume_interface):
+        self.device = device
+        self.volume_interface = volume_interface
+
+    def get_range(self):
+        return dict(zip(["min", "max", "step"], self.volume_interface.GetVolumeRange()))
+
+    def get_volume(self):
+        return self.volume_interface.GetMasterVolumeLevel()
+
+    def set_volume(self, value):
+        self.volume_interface.SetMasterVolumeLevel(value, None)
+
+    def is_muted(self):
+        return self.volume_interface.GetMute() == 1
+
+    def mute(self):
+        self.volume_interface.SetMute(1, None)
+
+    def unmute(self):
+        self.volume_interface.SetMute(0, None)
+    
+    def as_dict(self):
+        return {
+
+        }
+
+
 class WindowVolumeControllerFactory:
 
+    # ---- DEVICE STUFF --------------------------------------------------------
     @staticmethod
     def get_devices():
-        from pycaw.pycaw import AudioUtilities
         return AudioUtilities.GetAllDevices()
 
     @classmethod
@@ -68,36 +157,23 @@ class WindowVolumeControllerFactory:
 
     @classmethod
     def get_volume_controller_by_audio_endpoint_name(cls, target_name):
-        from pycaw.pycaw import IAudioEndpointVolume
-        from ctypes import cast, POINTER
-        from comtypes import CLSCTX_ALL
-
         device = cls.get_device_by_name(target_name)
         interface = device._dev.Activate(
             IAudioEndpointVolume._iid_, CLSCTX_ALL, None
         )
+        return DeviceVolumeController(device, cast(interface, POINTER(IAudioEndpointVolume)))
+    
+    # ---- APP STUFF --------------------------------------------------------
+    @staticmethod
+    def get_app_sessions():
+        return AudioUtilities.GetAllSessions()
+    
+    @classmethod
+    def get_process_volume_controllers(cls):
+        return [ProcessVolumeController(session) for session in cls.get_app_sessions()]
 
-        class WindowsVolumeController(VolumeController):
-
-            def __init__(self):
-                self.volume_interface = cast(interface, POINTER(IAudioEndpointVolume))
-
-            def get_range(self):
-                return dict(zip(["min", "max", "step"], self.volume_interface.GetVolumeRange()))
-
-            def get_volume(self):
-                return self.volume_interface.GetMasterVolumeLevel()
-
-            def set_volume(self, value):
-                self.volume_interface.SetMasterVolumeLevel(value, None)
-
-            def is_muted(self):
-                return self.volume_interface.GetMute()
-
-            def mute(self):
-                self.volume_interface.SetMute(1, None)
-
-            def unmute(self):
-                self.volume_interface.SetMute(0, None)
-
-        return WindowsVolumeController()
+    @classmethod
+    def get_process_volume_controller_by_name(cls, target_name):
+        for controller in cls.get_process_volume_controllers():
+            if target_name.lower() in controller.process_name.lower():
+                return controller

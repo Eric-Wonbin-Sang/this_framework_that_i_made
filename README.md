@@ -1,5 +1,10 @@
 # This Framework That I Made
 
+My Main Goal: get, set, combine, stream and/or execute anything or everything easily anywhere
+
+Like audio for example.
+Why on earth is audio such an absolute pain to deal with? Every system has some random limitation and nothing is cross platform except for some things unless something else. Endpoints are standardized, but not controlling them? And an endpoint is either an input or an output unless it's not??? I just want to be able to get raw audio data from my shit, stream it, control it, get app volume, have it be cross platform. Literally every app can do this, and you're telling me everyone has their own special little way of doing that? Dumb, annoying, don't care, I don't care so much I'm going to learn as little as I can to abstract whatever nonsense existed in the past because that stuff will probably never change and as a developer I never want to give this a second thought ever again.
+
 to test this:
 
 ```
