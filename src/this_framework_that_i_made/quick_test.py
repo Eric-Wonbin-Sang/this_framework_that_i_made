@@ -1,22 +1,18 @@
 from dataclasses import dataclass
 import warnings
-from this_framework_that_i_made.audio_helpers.wasapi import LoopbackStream
 from this_framework_that_i_made.python import PythonRuntimeEnv
 from this_framework_that_i_made.systems import WindowsSystem
-from this_framework_that_i_made.audio import AudioDeviceStreamer, HostApi
-
-import soundcard
-import pyaudiowpatch as pyaudio
-from pycaw.pycaw import AudioUtilities
-import sounddevice
 
 
 def test_audio_devices_and_endpoint():
     system = WindowsSystem()
-    audio_devices = system.audio_system.default_output_devices
-    audio_device = audio_devices[2]
-    wasapi_endpoint = audio_device.endpoints[1]
-    print(wasapi_endpoint)
+    device = system.audio_system.audio_devices[21]
+    audio_endpoint = device.audio_endpoints[3]
+
+    print(system)
+    for block in audio_endpoint.get_pcm_blocks():
+        print(block)
+    print(system)
 
 
 def test_runtime_env():
@@ -25,6 +21,7 @@ def test_runtime_env():
 
 
 def test_audio_capturing():
+    from this_framework_that_i_made.audio_helpers.wasapi import LoopbackStream
     system = WindowsSystem()
     audio_devices = system.audio_system.default_input_devices
     audio_device = audio_devices[2]
@@ -43,9 +40,9 @@ def test_audio_capturing():
             print(payload)
 
 
-from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 
 def get_friendly_name(dev) -> str:
+    from pycaw.pycaw import AudioUtilities
     with warnings.catch_warnings():
         # suppress deprecation warning for GetAllDevices
         warnings.simplefilter("ignore", UserWarning)
@@ -61,6 +58,7 @@ def get_friendly_name(dev) -> str:
 
 
 def test_audio_utilities():
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
     sessions = AudioUtilities.GetAllSessions()
     for session in sessions:
         print(session.Process and session.Process.name(), session)
@@ -194,13 +192,21 @@ def test_pyaudio_patch():
         wave_file.close()
 
 
+def test_PyAudioWrapper():
+    from this_framework_that_i_made.audio import PyAudioWrapper
+    p = PyAudioWrapper()
+    groups = p.get_device_groups()
+    print(p)
+
+
 def main():
-    # test_audio_devices_and_endpoint()
+    test_audio_devices_and_endpoint()
     # test_runtime_env()
     # test_audio_capturing()
     # test_audio_utilities()
     # test_per_app_recording()
-    test_pyaudio_patch()
+    # test_pyaudio_patch()
+    # test_PyAudioWrapper()
 
 
 if __name__ == "__main__":
