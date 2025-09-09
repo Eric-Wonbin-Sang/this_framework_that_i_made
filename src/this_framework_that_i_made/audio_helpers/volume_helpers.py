@@ -1,16 +1,17 @@
 
 from abc import ABC, abstractmethod
+from typing import Optional
 
 # TODO: will conflict when running on non-windows. need to handle. Can separate this module to import conditionally.
-from pycaw.pycaw import AudioUtilities
-from pycaw.pycaw import IAudioEndpointVolume
+from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 from ctypes import cast, POINTER
 from comtypes import CLSCTX_ALL
 
 from this_framework_that_i_made.generics import SavableObject, TftimException, ensure_savable
 
 
-class VolumeController(ABC):
+@ensure_savable
+class VolumeController(SavableObject, ABC):
 
     # @classmethod
     # @abstractmethod
@@ -41,6 +42,15 @@ class VolumeController(ABC):
     def set_max_volume(self):
         self.set_volume(self.get_range()["max"])
 
+    def set_min_volume(self):
+        self.set_volume(self.get_range()["min"])
+
+    def is_max_volume(self):
+        return self.get_volume() >= self.get_range()["max"]
+
+    def is_min_volume(self):
+        return self.get_volume() <= self.get_range()["min"]
+
     def increment_volume(self):
         range_values = self.get_range()
         curr_volume = self.get_volume()
@@ -69,9 +79,16 @@ class VolumeController(ABC):
     def unmute(self):
         ...
 
+    def as_dict(self):
+        return {
+            "range": self.get_range(),
+            "volume": self.get_volume(),
+            "percent": self.get_percent(),
+            "is_muted": self.is_muted(),
+        }
 
-@ensure_savable
-class ProcessVolumeController(VolumeController, SavableObject):
+
+class ProcessVolumeController(VolumeController):
 
     def __init__(self, audio_session):
         self.audio_session = audio_session
@@ -102,6 +119,7 @@ class ProcessVolumeController(VolumeController, SavableObject):
         return {
             "process_id": self.process_id,
             "process_name": self.process_name,
+            **super().as_dict(),
         }
 
     def __repr__(self):
@@ -109,8 +127,7 @@ class ProcessVolumeController(VolumeController, SavableObject):
         return f"{self.__class__.__name__}({process_name=})"
 
 
-@ensure_savable
-class DeviceVolumeController(VolumeController, SavableObject):
+class DeviceVolumeController(VolumeController):
     
     def __init__(self, device, volume_interface):
         self.device = device
@@ -136,7 +153,8 @@ class DeviceVolumeController(VolumeController, SavableObject):
     
     def as_dict(self):
         return {
-
+            "device_name": self.device.FriendlyName,
+            **super().as_dict(),
         }
 
 
@@ -168,6 +186,10 @@ class WindowVolumeControllerFactory:
     def get_app_sessions():
         return AudioUtilities.GetAllSessions()
     
+    def get_process_volume_controller_by_pid(pid) -> Optional[VolumeController]:
+        if (session := AudioUtilities.GetProcessSession(pid)) is not None:
+            return ProcessVolumeController(session)
+
     @classmethod
     def get_process_volume_controllers(cls):
         return [ProcessVolumeController(session) for session in cls.get_app_sessions()]

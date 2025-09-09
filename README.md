@@ -8,11 +8,19 @@ Why on earth is audio such an absolute pain to deal with? Every system has some 
 to test this:
 
 ```
+# all in the repo top dir
 # create the framework's egg:
 pip install -e .
 
 # run the test script:
 python -m tests.test
+
+# generate requirements
+pip-compile pyproject.toml --output-file=requirements.txt
+# install requirements
+pip install -r requirements.txt
+# to get name/version info
+pip show psutil
 ```
 
 # everything under this is out of date, fix!

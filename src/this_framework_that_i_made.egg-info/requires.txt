@@ -1,5 +1,12 @@
-sounddevice>=0.4.6
 psutil>=5.9
+
+[:sys_platform == "linux"]
+PyAudio>=0.2.14
+
+[:sys_platform == "win32"]
+pycaw>=20240210
+PyAudioWPatch>=0.2.12.7
+comtypes>=1.4.12
 
 [dev]
 pytest

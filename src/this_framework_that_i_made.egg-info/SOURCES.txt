@@ -14,6 +14,12 @@ src/this_framework_that_i_made.egg-info/SOURCES.txt
 src/this_framework_that_i_made.egg-info/dependency_links.txt
 src/this_framework_that_i_made.egg-info/requires.txt
 src/this_framework_that_i_made.egg-info/top_level.txt
+src/this_framework_that_i_made/audio_helpers/__init__.py
+src/this_framework_that_i_made/audio_helpers/audio_standards.py
+src/this_framework_that_i_made/audio_helpers/pyaudio_helper.py
+src/this_framework_that_i_made/audio_helpers/volume_helpers.py
+src/this_framework_that_i_made/audio_helpers/wasapi.py
+src/this_framework_that_i_made/audio_helpers/wasapi_per_app_loopback.py
 src/this_framework_that_i_made/things_DEPRECATED/audio.py
 src/this_framework_that_i_made/things_DEPRECATED/device.py
 src/this_framework_that_i_made/things_DEPRECATED/functions.py

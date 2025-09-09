@@ -1,4 +1,7 @@
+import time
 import warnings
+
+import psutil
 from this_framework_that_i_made.audio_helpers.volume_helpers import WindowVolumeControllerFactory
 from this_framework_that_i_made.python import PythonRuntimeEnv
 from this_framework_that_i_made.systems import WindowsSystem
@@ -212,15 +215,33 @@ def test_PyAudioWrapper():
     print(p)
 
 
+def test_processes():
+    system = WindowsSystem()
+    processes = system.processes_with_audio_controls
+    process = next(p for p in processes if "zen" in (p.name or "").lower())
+    
+    while True:
+        for p in processes:
+            if p.pid == 0:
+                continue
+            controller = p.volume_controller
+            if not controller.is_max_volume():
+                controller.increment_volume()
+            else:
+                controller.set_min_volume()
+            print(f"{p.name} {controller.get_volume()} {controller.get_range()}")
+        time.sleep(.02)
+
+
 def main():
-    test_audio_devices_and_endpoint()
+    # test_audio_devices_and_endpoint()
     # test_runtime_env()
     # test_audio_capturing()
     # test_audio_utilities()
     # test_per_app_recording()
     # test_pyaudio_patch()
     # test_PyAudioWrapper()
-
+    test_processes()
 
 if __name__ == "__main__":
     main()
