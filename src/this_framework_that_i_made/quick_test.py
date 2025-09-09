@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import warnings
 from this_framework_that_i_made.python import PythonRuntimeEnv
 from this_framework_that_i_made.systems import WindowsSystem
@@ -6,13 +5,20 @@ from this_framework_that_i_made.systems import WindowsSystem
 
 def test_audio_devices_and_endpoint():
     system = WindowsSystem()
-    device = system.audio_system.audio_devices[21]
-    audio_endpoint = device.audio_endpoints[3]
 
-    print(system)
-    for block in audio_endpoint.get_pcm_blocks():
-        print(block)
-    print(system)
+    # testing = "input"
+    testing = "output"
+
+    device = system.audio_system.audio_devices[21]
+    if testing == "input":
+        # read from the default loopback
+        audio_endpoint = device.audio_endpoints[3]
+        for block in audio_endpoint.get_pcm_blocks():
+            print(block)
+    if testing == "output":
+        audio_endpoint = device.audio_endpoints[2]
+        controller = audio_endpoint.volume_controller
+        print(controller)
 
 
 def test_runtime_env():
@@ -57,6 +63,7 @@ def get_friendly_name(dev) -> str:
         return "Unknown Device"
 
 
+
 def test_audio_utilities():
     from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
     sessions = AudioUtilities.GetAllSessions()
@@ -90,7 +97,7 @@ def test_audio_utilities():
     print("Range (dB):", volume.GetVolumeRange())
     
     print("Setting to -20 dB…")
-    volume.SetMasterVolumeLevel(0.0, None)
+    volume.SetMasterVolumeLevel(-1.0, None)
     print("New level:", volume.GetMasterVolumeLevel())
 
 

@@ -4,6 +4,8 @@ from functools import cached_property
 import logging
 from typing import List
 
+from this_framework_that_i_made.audio_helpers.volume_helpers import WindowVolumeControllerFactory
+
 from .audio_helpers.pyaudio_helper import PyAudioWrapper, get_pcm_blocks
 from .audio_helpers.audio_standards import (
     SampleFormat,
@@ -78,6 +80,7 @@ class AudioEndpoint:
 
         self.index: int = py_audio_data["index"]
         self.struct_version: int = py_audio_data["structVersion"]
+        # self.name: str = py_audio_data["name"].rstrip(PyAudioWrapper.WASAPI_LOOPBACK_SUFFIX)
         self.name: str = py_audio_data["name"]
         self.host_api_index: int = py_audio_data["hostApi"]
         self.max_input_channels: int = py_audio_data["maxInputChannels"]
@@ -103,6 +106,7 @@ class AudioEndpoint:
     def host_api_name(self):
         return PyAudioWrapper.get_host_api_name_by_index(self.host_api_index)
 
+    # only for input/duplex types
     def get_pcm_blocks(self, sample_format: SampleFormat = SampleFormat.INT_16, frames_per_buffer=1024):
         """Yields PCM blocks for this input endpoint with sensible defaults."""
         params = {
@@ -115,6 +119,12 @@ class AudioEndpoint:
         with get_pcm_blocks(**params) as blocks:
             for block in blocks:
                 yield block
+
+    # only for output types
+    @property
+    def volume_controller(self):
+        # TODO: make cross-platform
+        return WindowVolumeControllerFactory.get_volume_controller_by_audio_endpoint_name(self.name)
 
     def as_dict(self):
         return {
