@@ -8,7 +8,11 @@ comtypes==1.4.12 ; sys_platform == "win32"
     # via
     #   pycaw
     #   this_framework_that_i_made (pyproject.toml)
+mss==10.1.0
+    # via this_framework_that_i_made (pyproject.toml)
 numpy==2.3.3
+    # via this_framework_that_i_made (pyproject.toml)
+pillow==11.3.0
     # via this_framework_that_i_made (pyproject.toml)
 psutil==7.0.0
     # via
@@ -17,4 +21,10 @@ psutil==7.0.0
 pyaudiowpatch==0.2.12.7 ; sys_platform == "win32"
     # via this_framework_that_i_made (pyproject.toml)
 pycaw==20240210 ; sys_platform == "win32"
+    # via this_framework_that_i_made (pyproject.toml)
+pygetwindow==0.0.9 ; sys_platform == "win32"
+    # via this_framework_that_i_made (pyproject.toml)
+pyrect==0.2.0
+    # via pygetwindow
+pywin32==311 ; sys_platform == "win32"
     # via this_framework_that_i_made (pyproject.toml)

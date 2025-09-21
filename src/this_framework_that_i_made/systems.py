@@ -7,6 +7,8 @@ import psutil
 import socket
 
 from this_framework_that_i_made.audio_helpers.volume_helpers import WindowVolumeControllerFactory
+from this_framework_that_i_made.monitors import Monitor
+from this_framework_that_i_made.video_helpers.msft_windows import MsftWindow
 
 from .audio import AudioSystem, AudioDevice
 from .generics import SavableObject, ensure_savable, staticproperty
@@ -183,6 +185,11 @@ class Process(SavableObject):
     def volume_controller(self):
         return WindowVolumeControllerFactory.get_process_volume_controller_by_pid(self.pid)
 
+    def __repr__(self):
+        name = self.name
+        pid = self.pid
+        return f"{self.__class__.__name__}({name=}, {pid=})"
+
 
 @ensure_savable
 class OperatingSystem(ABC, SavableObject):
@@ -222,12 +229,25 @@ class OperatingSystem(ABC, SavableObject):
             if target_name.lower() in process.simple_snapshot.get("name", "").lower()
         ]
 
+    @property
+    def monitors(self):
+        return Monitor.get_monitors()
+
     def as_dict(self):
         return {
             "system_info": self.system_info,
             "cpu_info": self.cpu_info,
             "audio_system": self.audio_system,
         }
+
+
+class WindowsApplication:
+
+    def processes(self):
+        ...
+    
+    def windows(self):
+        ...
 
 
 class WindowsSystem(OperatingSystem):
@@ -258,6 +278,10 @@ class WindowsSystem(OperatingSystem):
             dev for dev in self.audio_system.audio_devices
             if any(endpoint_visible(ep) for ep in dev.endpoints)
         ]
+
+    @property
+    def windows(self):
+        return MsftWindow.get_windows()
 
 
 class UnixSystem(OperatingSystem):
