@@ -24,7 +24,11 @@ pycaw==20240210 ; sys_platform == "win32"
     # via this_framework_that_i_made (pyproject.toml)
 pygetwindow==0.0.9 ; sys_platform == "win32"
     # via this_framework_that_i_made (pyproject.toml)
+pynput==1.8.1
+    # via this_framework_that_i_made (pyproject.toml)
 pyrect==0.2.0
     # via pygetwindow
 pywin32==311 ; sys_platform == "win32"
     # via this_framework_that_i_made (pyproject.toml)
+six==1.17.0
+    # via pynput

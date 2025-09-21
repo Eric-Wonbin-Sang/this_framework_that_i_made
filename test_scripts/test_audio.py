@@ -13,8 +13,6 @@ except ModuleNotFoundError:
 from this_framework_that_i_made.audio_helpers.ms_audio_mappings.IMMDeviceEnumerator import DeviceRole, DeviceType, PyMmDeviceEnumerator
 from this_framework_that_i_made.audio_helpers.ms_audio_mappings.ms_audio_common import PROPERTYKEY
 from this_framework_that_i_made.audio_helpers.volume_helpers import WindowVolumeControllerFactory
-from this_framework_that_i_made.monitors import wait_for_fps_target
-from this_framework_that_i_made.python import PythonRuntimeEnv
 from this_framework_that_i_made.systems import WindowsSystem
 
 
@@ -41,11 +39,6 @@ def test_audio_devices_and_endpoint():
         print(controller)
 
 
-def test_runtime_env():
-    runtime_env = PythonRuntimeEnv()
-    print(runtime_env)
-
-
 def test_audio_capturing():
     from this_framework_that_i_made.audio_helpers.wasapi import LoopbackStream
     system = WindowsSystem()
@@ -61,9 +54,9 @@ def test_audio_capturing():
         for block in blocks:
             print(block)
 
-    with AudioDeviceStreamer(audio_device, sample_rate=48_000, channels=2, encoding="i16", block_ms=20, as_bytes=True) as streamer:
-        for payload in streamer.stream():
-            print(payload)
+    # with AudioDeviceStreamer(audio_device, sample_rate=48_000, channels=2, encoding="i16", block_ms=20, as_bytes=True) as streamer:
+    #     for payload in streamer.stream():
+    #         print(payload)
 
 
 
@@ -229,48 +222,6 @@ def test_PyAudioWrapper():
     print(p)
 
 
-def test_processes():
-    system = WindowsSystem()
-    processes = system.processes_with_audio_controls
-    process = next(p for p in processes if "zen" in (p.name or "").lower())
-    
-    while True:
-        for p in processes:
-            if p.pid == 0:
-                continue
-            controller = p.volume_controller
-            if not controller.is_max_volume():
-                controller.increment_volume()
-            else:
-                controller.set_min_volume()
-            print(f"{p.name} {controller.get_volume()} {controller.get_range()}")
-        time.sleep(.02)
-
-
-def test_monitors():
-    system = WindowsSystem()
-    monitors = system.monitors
-    print("\n".join(map(str, (m.as_dict() for m in monitors))))
-    print(monitors)
-
-    for screenshot in monitors[0].yield_content():
-        print(screenshot)
-
-
-def test_windows():
-    system = WindowsSystem()
-    print(system)
-
-    windows = system.windows
-    window = next(filter(lambda w: "Zen Browser".lower() in w.title.lower(), windows))
-
-    for content in window.yield_audio_content():
-        print(content)
-
-    # for content in system.windows[0].yield_video_content(fps=10):
-    #     print(content)
-
-
 def test_app_audio():
 
     device_enumerator = PyMmDeviceEnumerator.create()
@@ -364,15 +315,11 @@ def test_session_registers():
 
 def main():
     # test_audio_devices_and_endpoint()
-    # test_runtime_env()
     # test_audio_capturing()
     # test_audio_utilities()
     # test_per_app_recording()
     # test_pyaudio_patch()
     # test_PyAudioWrapper()
-    # test_processes()
-    # test_monitors()
-    # test_windows()
     # test_app_audio()
     test_session_registers()
 

@@ -22,6 +22,7 @@ dependencies = [
   "PyAudioWPatch>=0.2.12.7; sys_platform == 'win32'",
   "PyGetWindow>=0.0.9; sys_platform == 'win32'",
   "pillow>=11.3.0",
+  "pynput>=1.8.1",
 ]
 
 [tool.setuptools.packages.find]
