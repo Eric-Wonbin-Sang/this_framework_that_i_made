@@ -1,13 +1,44 @@
+from dataclasses import dataclass
 from pynput import mouse
-import threading, queue, time
+import queue
 
 from .common import InputDevice, InputEvent
 
 
 class MouseEvent(InputEvent):
+    ...
 
-    def __init__(self):
-        ...
+
+class ClickEvent(MouseEvent):
+
+    def __init__(self, button, is_pressed):
+        self.value = self.get_button_as_str(button)
+        self.is_pressed = is_pressed
+
+    @staticmethod
+    def get_button_as_str(button):
+        return {
+            mouse.Button.left: "left",
+            mouse.Button.right: "right",
+            mouse.Button.middle: "middle"
+        }.get(button, str(button))
+
+    def __str__(self):
+        value = self.value
+        is_pressed = self.is_pressed
+        return f"{self.__class__.__name__}({value=}, {is_pressed=})"
+
+
+@dataclass
+class MoveEvent(MouseEvent):
+    x: int
+    y: int
+
+
+@dataclass
+class ScrollEvent(MouseEvent):
+    dx: int  # horizontal scrolling
+    dy: int  # vertical scrolling
 
 
 class GlobalMouse(InputDevice):
@@ -22,43 +53,19 @@ class GlobalMouse(InputDevice):
                                   "detail": event-specific tuple}
     """
 
-    def __init__(self, include_move=True):
-        self.include_move = include_move
+    def __init__(self):
         self._listener = None
-        self._q = queue.Queue()
-        self._pressed = set()    # {"left","right","middle"}
-        self._pos = (0, 0)
+        self._queue = queue.Queue()
         self._alive = False
 
-    # --- internal: callbacks -> queue snapshots ---
-    def _snapshot(self, etype: str, detail: tuple):
-        snap = {
-            "type": etype,
-            "pos": self._pos,
-            "buttons": set(self._pressed),  # copy
-            "detail": detail
-        }
-        self._q.put(snap)
-
     def _on_move(self, x, y):
-        self._pos = (x, y)
-        if self.include_move:
-            self._snapshot("move", (x, y))
+        self._queue.put(MoveEvent(x, y))
 
     def _on_click(self, x, y, button, pressed):
-        name = {mouse.Button.left: "left",
-                mouse.Button.right: "right",
-                mouse.Button.middle: "middle"}.get(button, str(button))
-        if pressed:
-            self._pressed.add(name)
-        else:
-            self._pressed.discard(name)
-        self._pos = (x, y)
-        self._snapshot("click", (name, pressed, (x, y)))
+        self._queue.put(ClickEvent(button, pressed))
 
     def _on_scroll(self, x, y, dx, dy):
-        self._pos = (x, y)
-        self._snapshot("scroll", (dx, dy, (x, y)))
+        self._queue.put(ScrollEvent(dx, dy))
 
     # --- public API ---
     def start(self):
@@ -87,11 +94,10 @@ class GlobalMouse(InputDevice):
         try:
             while self._alive:
                 try:
-                    snap = self._q.get(timeout=timeout)
+                    snap = self._queue.get(timeout=timeout)
                     yield snap
                 except queue.Empty:
                     # Optionally emit a heartbeat/current status
-                    # yield {"type":"heartbeat","pos":self._pos,"buttons":set(self._pressed),"detail":()}
                     pass
         finally:
             self.stop()
