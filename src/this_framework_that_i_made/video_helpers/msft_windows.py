@@ -242,3 +242,9 @@ class MsftWindow(Window):
         return {
             "hwnd": self.hwnd,
         }
+
+    def __repr__(self):
+        title = self.title
+        is_active = self.is_active
+        visible = self.visible
+        return f"{self.__class__.__name__}({title=}, {is_active=}, {visible=})"

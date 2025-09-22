@@ -1,6 +1,6 @@
 
-from this_framework_that_i_made.generic.mux import Source, fan_in
-from this_framework_that_i_made.input_helpers.keyboard import GlobalKeyboard
+from this_framework_that_i_made.generic.mux import Source, yield_from_sources
+from this_framework_that_i_made.input_helpers.keyboard import KeyboardEventGenerator, KeyEvent
 from this_framework_that_i_made.input_helpers.mouse import GlobalMouse
 
 
@@ -15,7 +15,7 @@ def test_mouse():
 
 
 def test_keyboard():
-    kb = GlobalKeyboard(dedupe_repeats=True)
+    kb = KeyboardEventGenerator(dedupe_repeats=True)
     try:
         for e in kb.yield_keyboard_events():
             print(e)
@@ -28,18 +28,20 @@ def test_keyboard():
 
 def test_inputs():
     m = GlobalMouse()
-    kb = GlobalKeyboard(dedupe_repeats=True)
+    kb = KeyboardEventGenerator(dedupe_repeats=True)
+    # kb = KeyboardEventGenerator(dedupe_repeats=True, suppress=True)
 
-    events = fan_in(
+    events = yield_from_sources(
         Source("mouse", m.yield_mouse_events),
         Source("keyboard", kb.yield_keyboard_events),
         # pump_timeout=0.25,
     )
     try:
-        for src, evt in events:
-            print(src, evt)
-            # Exit on Ctrl+Q release
-            if src == "keyboard" and (not evt.is_pressed) and evt.value == "q" and ("ctrl" in kb._down):
+        for src, event in events:
+            print(src, event)
+            if type(event) == KeyEvent and event.is_cmd:
+                print('CMDCMDCMD')
+            if type(event) == KeyEvent and event.value == 'esc':
                 break
     finally:
         # If your yielders don't auto-stop in their own finally blocks,

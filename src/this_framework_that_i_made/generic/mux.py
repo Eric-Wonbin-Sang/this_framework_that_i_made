@@ -28,7 +28,7 @@ class Source:
     stop: Optional[Callable[[], None]] = None
 
 
-def fan_in(
+def yield_from_sources(
     *sources: Source,
     pump_timeout: float = 0.25,   # passed to yielders that accept `timeout=`
     queue_maxsize: int = 0,

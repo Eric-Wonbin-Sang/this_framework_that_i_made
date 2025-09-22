@@ -223,10 +223,10 @@ class OperatingSystem(ABC, SavableObject):
         self.processes  # get up-to-date processes in internal cache
         return [self._pid_to_process[session.ProcessId] for session in sessions]
 
-    def get_processes_by_name(self, target_name):
+    def get_processes_by_name(self, target_name) -> List[Process]:
         return [
             process for process in self.processes
-            if target_name.lower() in process.simple_snapshot.get("name", "").lower()
+            if target_name.lower() in (process.name or "").lower()
         ]
 
     @property
@@ -280,9 +280,14 @@ class WindowsSystem(OperatingSystem):
         ]
 
     @property
-    def windows(self):
+    def windows(self) -> List[MsftWindow]:
         return MsftWindow.get_windows()
 
+    def get_window(self, target_name) -> MsftWindow:
+        return next(
+            (w for w in self.windows if (target_name or "").casefold() in (w.title or "").casefold()),
+            None
+        )
 
 class UnixSystem(OperatingSystem):
     ...

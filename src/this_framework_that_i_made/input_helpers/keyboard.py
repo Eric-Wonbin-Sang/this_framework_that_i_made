@@ -83,7 +83,28 @@ class KeyEvent(KeyboardEvent):
         return f"{self.__class__.__name__}({value=}, {is_modifier=}, {is_pressed=})"
 
 
-class GlobalKeyboard(InputDevice):
+class KeyboardInputter:
+
+    def __init__(self):
+        self._ctl = keyboard.Controller()
+
+    # def play_event(self, event: KeyboardEvent):
+    #     if self._suppress and self._pass_through and self._allow(event) and not self._replaying:
+    #         # re-inject the same event so other apps see it
+    #         self._replaying = True
+    #         try:
+    #             key = event._raw if hasattr(event, "_raw") else None  # add _raw in your KeyEvent if you want
+    #             if key is None:  # fallback: rebuild from evt.value
+    #                 key = getattr(keyboard.Key, event.value, keyboard.KeyCode.from_char(event.value))
+    #             if event.is_pressed:
+    #                 self._ctl.press(key)
+    #             else:
+    #                 self._ctl.release(key)
+    #         finally:
+    #             self._replaying = False
+
+
+class KeyboardEventGenerator(InputDevice):
     """
     Cross-platform keyboard event stream (Windows/macOS/Linux X11).
     Yields KeyEvent on every press/release.
