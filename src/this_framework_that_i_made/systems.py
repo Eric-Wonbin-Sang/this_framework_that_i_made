@@ -7,7 +7,7 @@ import psutil
 import socket
 
 from this_framework_that_i_made.audio_helpers.volume_helpers import WindowVolumeControllerFactory
-from this_framework_that_i_made.monitors import Monitor
+from this_framework_that_i_made.video_helpers.monitors import Monitor
 from this_framework_that_i_made.video_helpers.msft_windows import MsftWindow
 
 from .audio import AudioSystem, AudioDevice

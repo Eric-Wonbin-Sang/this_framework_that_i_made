@@ -6,7 +6,7 @@ from typing import List
 import mss
 import numpy as np
 
-from .generics import SavableObject, ensure_savable
+from ..generics import SavableObject, ensure_savable
 
 
 @ensure_savable

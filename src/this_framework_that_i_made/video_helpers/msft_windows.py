@@ -12,7 +12,7 @@ from PIL import Image
 from this_framework_that_i_made.audio_helpers.msft_audio import read_pcm_blocks_for_pid
 from this_framework_that_i_made.audio_helpers.wasapi_per_app_loopback import PerAppLoopback
 from this_framework_that_i_made.generics import SavableObject, ensure_savable
-from this_framework_that_i_made.monitors import Window, wait_for_fps_target
+from this_framework_that_i_made.video_helpers.monitors import Window, wait_for_fps_target
 
 
 PW_RENDERFULLCONTENT = 0x00000002  # Win8+

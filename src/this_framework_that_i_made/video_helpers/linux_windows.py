@@ -1,5 +1,5 @@
 from ..generics import ensure_savable
-from ..monitors import Window
+from .monitors import Window
 
 
 @ensure_savable

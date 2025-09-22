@@ -11,17 +11,19 @@ class MouseEvent(InputEvent):
 
 class ClickEvent(MouseEvent):
 
+    BUTTON_MAP = {
+        mouse.Button.left: "left",
+        mouse.Button.right: "right",
+        mouse.Button.middle: "middle"
+    }
+
     def __init__(self, button, is_pressed):
         self.value = self.get_button_as_str(button)
         self.is_pressed = is_pressed
 
-    @staticmethod
-    def get_button_as_str(button):
-        return {
-            mouse.Button.left: "left",
-            mouse.Button.right: "right",
-            mouse.Button.middle: "middle"
-        }.get(button, str(button))
+    @classmethod
+    def get_button_as_str(cls, button):
+        return cls.BUTTON_MAP.get(button, str(button))
 
     def __str__(self):
         value = self.value
@@ -47,16 +49,13 @@ class GlobalMouse(InputDevice):
     TODO: this is called global because this does not differentiate between actual devices.
 
     Cross-platform mouse state + event stream.
-    Yields a dict on any change: {"type": "move|click|scroll",
-                                  "pos": (x, y),
-                                  "buttons": {"left","right","middle"},
-                                  "detail": event-specific tuple}
     """
 
-    def __init__(self):
+    def __init__(self, suppress: bool = False):
         self._listener = None
         self._queue = queue.Queue()
         self._alive = False
+        self._suppress = suppress
 
     def _on_move(self, x, y):
         self._queue.put(MoveEvent(x, y))
@@ -75,7 +74,8 @@ class GlobalMouse(InputDevice):
         self._listener = mouse.Listener(
             on_move=self._on_move,
             on_click=self._on_click,
-            on_scroll=self._on_scroll
+            on_scroll=self._on_scroll,
+            suppress=self._suppress,
         )
         self._listener.start()
 
