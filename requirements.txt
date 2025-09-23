@@ -28,7 +28,20 @@ pynput==1.8.1
     # via this_framework_that_i_made (pyproject.toml)
 pyrect==0.2.0
     # via pygetwindow
+pyside6==6.9.2
+    # via this_framework_that_i_made (pyproject.toml)
+pyside6-addons==6.9.2
+    # via pyside6
+pyside6-essentials==6.9.2
+    # via
+    #   pyside6
+    #   pyside6-addons
 pywin32==311 ; sys_platform == "win32"
     # via this_framework_that_i_made (pyproject.toml)
+shiboken6==6.9.2
+    # via
+    #   pyside6
+    #   pyside6-addons
+    #   pyside6-essentials
 six==1.17.0
     # via pynput

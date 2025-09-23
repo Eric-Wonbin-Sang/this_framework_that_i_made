@@ -63,8 +63,9 @@ def wait_for_fps_target(fps: float):
 @ensure_savable
 class Monitor(RectangleMixin, PlaneObject, SavableObject):
 
-    def __init__(self, data):
+    def __init__(self, data, is_primary=False):
         self.monitor_data = data
+        self.is_primary = is_primary
         RectangleMixin.__init__(self, width=data["width"], height=data["height"])
         PlaneObject.__init__(self, x=data["left"], y=data["top"])
 
@@ -82,14 +83,40 @@ class Monitor(RectangleMixin, PlaneObject, SavableObject):
     @classmethod
     def get_monitors(cls) -> List["Monitor"]:
         with mss.mss() as probe:  # just to list monitors
-            return [cls(data) for data in probe.monitors[1:]]
+            # real monitors start at index 1; index 0 is the virtual desktop union
+            mons = probe.monitors[1:]
+
+            # 1) primary = monitor containing (0,0)
+            origin_candidates = [
+                i for i, m in enumerate(mons)
+                if (m["left"] <= 0 < m["left"] + m["width"]
+                    and m["top"] <= 0 < m["top"] + m["height"])
+            ]
+
+            if origin_candidates:
+                primary_idx = origin_candidates[0]
+            else:
+                # 2) fallback: backend-provided flag
+                flagged = [i for i, m in enumerate(mons) if m.get("primary")]
+                if flagged:
+                    primary_idx = flagged[0]
+                else:
+                    # 3) last resort: first real monitor (if any)
+                    primary_idx = 0 if mons else -1
+
+            result: List["Monitor"] = []
+            for i, m in enumerate(mons):
+                d = dict(m)  # copy so we don't mutate mss' internal dict
+                result.append(cls(d, is_primary=(i == primary_idx)))
+            return result
 
     def is_false(self):
         return self.width <= 1 and self.height <= 1
 
     def as_dict(self):
         return {
-            "orientation": self.orientation,
+            "orientation": self.orientation.name,
+            "is_primary": self.is_primary,
             **RectangleMixin.as_dict(self),
             **PlaneObject.as_dict(self),
         }

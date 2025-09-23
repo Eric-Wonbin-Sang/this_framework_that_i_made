@@ -23,6 +23,7 @@ dependencies = [
   "PyGetWindow>=0.0.9; sys_platform == 'win32'",
   "pillow>=11.3.0",
   "pynput>=1.8.1",
+  "PySide6>=6.9.2",
 ]
 
 [tool.setuptools.packages.find]

@@ -6,11 +6,18 @@ Author-email: You <comfycoder.exe@gmail.com>
 License: MIT
 Requires-Python: >=3.13.7
 Description-Content-Type: text/markdown
+Requires-Dist: numpy>=2.3.3
 Requires-Dist: psutil>=5.9
+Requires-Dist: mss>=10.1.0
+Requires-Dist: pywin32>=311; sys_platform == "win32"
+Requires-Dist: comtypes>=1.4.12; sys_platform == "win32"
 Requires-Dist: pycaw>=20240210; sys_platform == "win32"
 Requires-Dist: PyAudio>=0.2.14; sys_platform == "linux"
 Requires-Dist: PyAudioWPatch>=0.2.12.7; sys_platform == "win32"
-Requires-Dist: comtypes>=1.4.12; sys_platform == "win32"
+Requires-Dist: PyGetWindow>=0.0.9; sys_platform == "win32"
+Requires-Dist: pillow>=11.3.0
+Requires-Dist: pynput>=1.8.1
+Requires-Dist: PySide6>=6.9.2
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
 Requires-Dist: mypy; extra == "dev"
@@ -26,11 +33,19 @@ Why on earth is audio such an absolute pain to deal with? Every system has some 
 to test this:
 
 ```
+# all in the repo top dir
 # create the framework's egg:
 pip install -e .
 
 # run the test script:
 python -m tests.test
+
+# generate requirements
+pip-compile pyproject.toml --output-file=requirements.txt
+# install requirements
+pip install -r requirements.txt
+# to get name/version info
+pip show psutil
 ```
 
 # everything under this is out of date, fix!

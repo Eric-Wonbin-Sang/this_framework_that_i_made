@@ -1,13 +1,14 @@
 
 from ctypes import windll, wintypes
+import ctypes
 from typing import List
 import win32con
 import win32gui
 import win32ui
 import win32process
 import pygetwindow
-
 from PIL import Image
+import win32gui, win32con
 
 from this_framework_that_i_made.audio_helpers.msft_audio import read_pcm_blocks_for_pid
 from this_framework_that_i_made.audio_helpers.wasapi_per_app_loopback import PerAppLoopback
@@ -16,6 +17,16 @@ from this_framework_that_i_made.video_helpers.monitors import Window, wait_for_f
 
 
 PW_RENDERFULLCONTENT = 0x00000002  # Win8+
+
+# Win32 constants
+WM_GETICON   = 0x007F
+ICON_SMALL   = 0
+ICON_BIG     = 1
+ICON_SMALL2  = 2  # better small icon on Vista+
+GCLP_HICON   = -14
+GCLP_HICONSM = -34
+
+user32 = ctypes.windll.user32
 
 
 class MsftWindowVideoCapurer:
@@ -238,9 +249,70 @@ class MsftWindow(Window):
         for ts, chunk in capturer.yield_content(frames_per_buffer):
             yield ts, chunk
 
+    @staticmethod
+    def _get_hicon(hwnd: int, want_big: bool) -> int | None:
+        """Get an HICON for a window; returns a *copy* of the icon handle you own."""
+        # 1) Ask the window for an icon
+        order = ([ICON_BIG, ICON_SMALL2, ICON_SMALL] if want_big
+                else [ICON_SMALL2, ICON_SMALL, ICON_BIG])
+        for t in order:
+            h = win32gui.SendMessage(hwnd, WM_GETICON, t, 0)
+            if h:
+                return user32.CopyIcon(h)  # copy so we can DestroyIcon later
+
+        # 2) Fallback to the window class icon
+        idx = GCLP_HICON if want_big else GCLP_HICONSM
+        h = win32gui.GetClassLong(hwnd, idx)
+        if h:
+            return user32.CopyIcon(h)
+
+        return None
+
+    @staticmethod
+    def _hicon_to_pil(hicon: int, size: int) -> Image.Image:
+        # screen DC -> memory DC + compatible bitmap
+        hdc_screen = win32gui.GetDC(0)
+        src_dc = win32ui.CreateDCFromHandle(hdc_screen)
+        mem_dc = src_dc.CreateCompatibleDC()
+        bmp = win32ui.CreateBitmap()
+        bmp.CreateCompatibleBitmap(src_dc, size, size)
+        mem_dc.SelectObject(bmp)
+
+        # Clear background, then draw icon
+        mem_dc.FillSolidRect((0, 0, size, size), 0x000000)  # or use win32gui.PatBlt(...) as in Fix A
+        win32gui.DrawIconEx(mem_dc.GetSafeHdc(), 0, 0, hicon, size, size, 0, None, win32con.DI_NORMAL)
+
+        # Read pixels (BGRX bottom-up) -> PIL
+        info = bmp.GetInfo()
+        data = bmp.GetBitmapBits(True)
+        img = Image.frombuffer("RGB", (info["bmWidth"], info["bmHeight"]), data, "raw", "BGRX", 0, 1)
+
+        # Cleanup
+        win32gui.DeleteObject(bmp.GetHandle())
+        mem_dc.DeleteDC()
+        src_dc.DeleteDC()
+        win32gui.ReleaseDC(0, hdc_screen)
+        win32gui.DestroyIcon(hicon)
+        return img
+
+    def get_icon(self, size: int = 32) -> Image.Image | None:
+        """
+        window: your pygetwindow wrapper (has .hwnd or ._hWnd)
+        size:   target render size (16/24/32/48 recommended)
+        """
+        hwnd = getattr(self.window, "hwnd", getattr(self.window, "_hWnd", None))
+        if not hwnd or not win32gui.IsWindow(hwnd):
+            return None
+
+        hicon = self._get_hicon(hwnd, want_big=(size >= 32))
+        if not hicon:
+            return None
+        return self._hicon_to_pil(hicon, size)
+
     def as_dict(self):
         return {
             "hwnd": self.hwnd,
+            "title": self.title,
         }
 
     def __repr__(self):

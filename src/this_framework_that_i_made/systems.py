@@ -230,8 +230,14 @@ class OperatingSystem(ABC, SavableObject):
         ]
 
     @property
-    def monitors(self):
+    def monitors(self) -> List[Monitor]:
         return Monitor.get_monitors()
+    
+    @property
+    def primary_monitor(self) -> Optional[Monitor]:
+        for m in self.monitors:
+            if m.is_primary:
+                return m
 
     def as_dict(self):
         return {
@@ -283,11 +289,15 @@ class WindowsSystem(OperatingSystem):
     def windows(self) -> List[MsftWindow]:
         return MsftWindow.get_windows()
 
-    def get_window(self, target_name) -> MsftWindow:
+    def get_window_by_name(self, target_name) -> MsftWindow:
         return next(
             (w for w in self.windows if (target_name or "").casefold() in (w.title or "").casefold()),
             None
         )
+
+    def get_window_by_hwnd(self, target_hwnd) -> MsftWindow:
+        return next((w for w in self.windows if target_hwnd == w.hwnd), None)
+
 
 class UnixSystem(OperatingSystem):
     ...

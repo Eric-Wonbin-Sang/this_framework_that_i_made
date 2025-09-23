@@ -1,4 +1,5 @@
 import ctypes
+import io
 import win32api, win32con, win32gui, win32process
 
 from this_framework_that_i_made.input_helpers.keyboard import KeyEvent, KeyboardEventGenerator
