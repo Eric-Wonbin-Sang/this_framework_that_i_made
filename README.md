@@ -1,5 +1,7 @@
 # This Framework That I Made
 
+TODO: this is getting unruly fast. It makes more sense to split this project up into standardized modules that work together in this framework.
+
 My Main Goal: get, set, combine, stream and/or execute anything or everything easily anywhere
 
 to test this:
